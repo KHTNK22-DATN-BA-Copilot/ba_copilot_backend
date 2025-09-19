@@ -13,6 +13,7 @@ from typing import Optional
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from app.core.config import settings
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -67,25 +68,36 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
 
     return user
 
+
+
 def send_reset_email(to_email: str, reset_code: str):
-    sender_email = "your_email@gmail.com"
-    sender_password = "your_app_password"  
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
-
     subject = "Your Password Reset Code"
-    body = f"Here is your reset code: {reset_code}"
 
-    msg = MIMEMultipart()
-    msg["From"] = sender_email
+    body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <p>We received a request to reset your password.</p>
+            <p>Please use the following reset code:</p>
+            <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
+                {reset_code}
+            </h2>
+            <p>This code will expire in <b>15 minutes</b>.</p>
+            <br>
+            <p>If you did not request a password reset, please ignore this email.</p>
+        </body>
+    </html>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = settings.smtp_user
     msg["To"] = to_email
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(body, "html"))
 
-    with smtplib.SMTP(smtp_server, smtp_port) as server:
+    with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
         server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, to_email, msg.as_string())
+        server.login(settings.smtp_user, settings.smtp_password)
+        server.sendmail(settings.smtp_user, to_email, msg.as_string())
 
 
 @router.post("/register", response_model=UserResponse)
@@ -144,10 +156,10 @@ def change_password(
 
 @router.post("/forgot-password")
 def forgot_password(
-    password_data: ForgetPasswordRequest,
+    reset_data: ForgetPasswordRequest,
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == password_data.email).first()
+    user = db.query(User).filter(User.email == reset_data.email).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -162,8 +174,7 @@ def forgot_password(
     db.commit()
     db.refresh(user)
 
-    # TODO: gửi email thực tế (SMTP/SendGrid/Resend...)
-    print(f"Reset code for {user.email}: {reset_code}")
+    send_reset_email(reset_data.email,reset_code)
 
     return {"message": "Reset code has been sent to your email"}
 
