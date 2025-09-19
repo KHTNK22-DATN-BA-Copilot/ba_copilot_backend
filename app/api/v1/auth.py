@@ -5,11 +5,14 @@ from app.core.database import get_db
 from app.core.security import get_password_hash, verify_password, create_access_token, verify_token
 from app.models.user import User
 from app.models.token import Token
-from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse
+from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest
 from app.schemas.user import UserResponse
 from datetime import datetime, timedelta
 import secrets
 from typing import Optional
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -63,6 +66,26 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
         )
 
     return user
+
+def send_reset_email(to_email: str, reset_code: str):
+    sender_email = "your_email@gmail.com"
+    sender_password = "your_app_password"  
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
+
+    subject = "Your Password Reset Code"
+    body = f"Here is your reset code: {reset_code}"
+
+    msg = MIMEMultipart()
+    msg["From"] = sender_email
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
 
 
 @router.post("/register", response_model=UserResponse)
@@ -118,6 +141,31 @@ def change_password(
 
     return {"message": "Password changed successfully"}
 
+
+@router.post("/forgot-password")
+def forgot_password(
+    password_data: ForgetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == password_data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email not found"
+        )
+
+    reset_code = str(secrets.randbelow(1000000)).zfill(6)
+
+    user.reset_code = reset_code
+    user.reset_code_expiration = datetime.utcnow() + timedelta(minutes=15)
+
+    db.commit()
+    db.refresh(user)
+
+    # TODO: gửi email thực tế (SMTP/SendGrid/Resend...)
+    print(f"Reset code for {user.email}: {reset_code}")
+
+    return {"message": "Reset code has been sent to your email"}
 
 @router.post("/login", response_model=TokenResponse)
 def login(email: str = Form(), password: str = Form(), db: Session = Depends(get_db)):

@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str
 
+    smtp_server: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30

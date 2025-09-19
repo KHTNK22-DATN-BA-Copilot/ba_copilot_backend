@@ -11,6 +11,8 @@ class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
 
+class ForgetPasswordRequest(BaseModel):
+    email: str
 
 class TokenResponse(BaseModel):
     access_token: str
