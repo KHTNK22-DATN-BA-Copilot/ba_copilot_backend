@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash, verify_password, create_access_token, verify_token
 from app.models.user import User
 from app.models.token import Token
-from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest
+from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
 from app.schemas.user import UserResponse
 from datetime import datetime, timedelta
 import secrets
@@ -14,6 +14,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
+from fastapi import Query
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -162,7 +163,7 @@ def forgot_password(
     user = db.query(User).filter(User.email == reset_data.email).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email not found"
         )
 
@@ -177,6 +178,43 @@ def forgot_password(
     send_reset_email(reset_data.email,reset_code)
 
     return {"message": "Reset code has been sent to your email"}
+
+@router.post("/verify-otp")
+def verify_otp(
+    verify_data: VerifyOTPRequest,
+    email: str = Query(...), 
+    db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user or user.reset_code != verify_data.code or user.reset_code_expiration < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code"
+        )
+
+    return {"message": "OTP verified successfully"}
+
+@router.post("/reset-password")
+def reset_password(
+    email: str = Query(...), 
+    reset_data: ResetPasswordRequest = None,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found"
+        )
+
+
+    user.passwordhash = get_password_hash(reset_data.new_password)
+    user.reset_code = None
+    user.reset_code_expiration = None
+
+    db.commit()
+    db.refresh(user)
+
+    return {"message": "Password reset successful"}
 
 @router.post("/login", response_model=TokenResponse)
 def login(email: str = Form(), password: str = Form(), db: Session = Depends(get_db)):
