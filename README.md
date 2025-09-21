@@ -91,3 +91,12 @@ The application currently supports the following 6 endpoints:
        "new_password": "12345678"
      }
      ```
+
+7. **Verify register email**  
+   - **Endpoint**: `POST http://localhost:8010/api/v1/auth/verify-email?email=thuongquanquanhy@gmail.com`  
+   - **Request Body**:  
+     ```json
+     {
+       "code": "123456",
+     }
+     ```
