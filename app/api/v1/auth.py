@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header, Form
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_password_hash, verify_password, create_access_token, verify_token
+from app.core.security import get_password_hash, get_otp_hash ,verify_password, create_access_token, verify_token, verify_email_otp
 from app.models.user import User
 from app.models.token import Token
 from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
@@ -101,6 +101,34 @@ def send_reset_email(to_email: str, reset_code: str):
         server.sendmail(settings.smtp_user, to_email, msg.as_string())
 
 
+def send_verify_email_otp(to_email: str, reset_code: str):
+    subject = "Your Verification Code"
+
+    body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <p>We received a request to register an account.</p>
+            <p>Please use the following verification code:</p>
+            <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
+                {reset_code}
+            </h2>
+            <p>This code will expire in <b>15 minutes</b>.</p>
+            <br>
+            <p>If you did not request to register, please ignore this email.</p>
+        </body>
+    </html>
+    """
+    msg = MIMEMultipart("alternative")
+    msg["From"] = settings.smtp_user
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "html"))
+
+    with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
+        server.starttls()
+        server.login(settings.smtp_user, settings.smtp_password)
+        server.sendmail(settings.smtp_user, to_email, msg.as_string())
+
 @router.post("/register", response_model=UserResponse)
 def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
     # Check if user already exists
@@ -113,23 +141,45 @@ def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
 
     # Hash password and create user
     hashed_password = get_password_hash(user_data.passwordhash)
-    verification_token = secrets.token_urlsafe(32)
+    otp = str(secrets.randbelow(1000000)).zfill(6)
+
+    hashed_otp = get_otp_hash(otp)  
+    send_verify_email_otp(user_data.email,otp)
 
     db_user = User(
         name=user_data.name,
         email=user_data.email,
         passwordhash=hashed_password,
         email_verified=False,
-        email_verification_token=verification_token,
+        email_verification_token=hashed_otp,
         email_verification_expiration=datetime.utcnow() + timedelta(hours=24)
     )
 
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    return {
+        "user": db_user,
+        "message": "Register successfully, please check your mail to verify email"
+    }
 
-    return db_user
+@router.post("/verify-email")
+def verify_email_by_otp(
+    verify_data:VerifyOTPRequest,
+    email: str = Query(...), 
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == email).first()
+    if not user or user.email_verification_expiration < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
+    if not verify_email_otp(verify_data.code, user.email_verification_token):  
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+
+    user.email_verification_token = None
+    user.email_verification_expiration = None
+    return {"message": "OTP verified successfully"}
+    
 
 @router.post("/change-password")
 def change_password(
@@ -168,8 +218,9 @@ def forgot_password(
         )
 
     reset_code = str(secrets.randbelow(1000000)).zfill(6)
+    hashed_code = get_otp_hash(reset_code)  
 
-    user.reset_code = reset_code
+    user.reset_code = hashed_code
     user.reset_code_expiration = datetime.utcnow() + timedelta(minutes=15)
 
     db.commit()
@@ -185,11 +236,11 @@ def verify_otp(
     email: str = Query(...), 
     db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
-    if not user or user.reset_code != verify_data.code or user.reset_code_expiration < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset code"
-        )
+    if not user or user.reset_code_expiration < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+
+    if not verify_otp(VerifyOTPRequest.code, user.reset_code):  
+        raise HTTPException(status_code=400, detail="Invalid OTP")
 
     return {"message": "OTP verified successfully"}
 
