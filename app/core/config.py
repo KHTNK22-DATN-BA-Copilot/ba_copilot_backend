@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional,List
 
 
 class Settings(BaseSettings):
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8010
 
-    frontend_url: str
+    frontend_url: List[str]
 
     class Config:
         env_file = ".env"

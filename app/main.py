@@ -18,11 +18,12 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=settings.frontend_url,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.on_event("startup")
 async def startup_event():

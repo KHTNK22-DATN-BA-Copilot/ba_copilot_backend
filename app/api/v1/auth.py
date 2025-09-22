@@ -6,7 +6,7 @@ from app.core.security import get_password_hash, get_otp_hash ,verify_password, 
 from app.models.user import User
 from app.models.token import Token
 from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
-from app.schemas.user import UserResponse
+from app.schemas.user import UserResponse, RegisterResponse
 from datetime import datetime, timedelta
 import secrets
 from typing import Optional
@@ -129,7 +129,7 @@ def send_verify_email_otp(to_email: str, reset_code: str):
         server.login(settings.smtp_user, settings.smtp_password)
         server.sendmail(settings.smtp_user, to_email, msg.as_string())
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=RegisterResponse)
 def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()

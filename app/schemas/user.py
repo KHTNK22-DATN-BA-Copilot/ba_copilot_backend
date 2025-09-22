@@ -23,6 +23,9 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
-
+class RegisterResponse(BaseModel):
+    user: UserResponse
+    message: str
+    
 class UserInDB(UserResponse):
     passwordhash: str
