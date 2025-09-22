@@ -3,6 +3,8 @@ from app.api.v1 import auth
 from app.core.database import engine, Base
 import logging
 import time
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +15,14 @@ app = FastAPI(title="BaCopilot Authentication API", version="1.0.0")
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.frontend_url],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 async def startup_event():

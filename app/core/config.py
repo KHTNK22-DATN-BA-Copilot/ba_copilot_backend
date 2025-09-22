@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8010
 
+    frontend_url: str
+
     class Config:
         env_file = ".env"
 
