@@ -18,7 +18,7 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
       # thêm 2 cột mới
-    reset_code = Column(String(10), nullable=True)
+    reset_code = Column(String(255), nullable=True)
     reset_code_expiration = Column(DateTime, nullable=True)
 
     tokens = relationship("Token", back_populates="user")
