@@ -239,7 +239,7 @@ def verify_otp(
     if not user or user.reset_code_expiration < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
-    if not verify_otp(VerifyOTPRequest.code, user.reset_code):  
+    if not verify_email_otp(verify_data.code, user.reset_code):  
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
     return {"message": "OTP verified successfully"}
