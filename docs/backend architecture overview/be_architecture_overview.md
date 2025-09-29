@@ -33,16 +33,16 @@ flowchart TD
     C -->|LLM Results| B
     B -->|Response| A
 ```
-**Architecture Diagram** (text-based, can be visualized using tools like Draw.io):
+**Architecture Diagram**:
 
 ```mermaid
 flowchart TD
     A[Frontend] --> B[HTTP/REST API]
     B --> C[Backend]
-    B --> F[Database]
+    C --> F[(Database)]
     C --> D[gRPC/HTTP]
-    D --> E[AI Service (LLM Inference)]
-    F-->B
+    D --> E["AI Service - LLM Inference"]
+    F --> C
 ```
 
 ### 2.2 Main Backend Components
