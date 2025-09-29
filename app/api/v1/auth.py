@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash, get_otp_hash ,verify_password, create_access_token, verify_token, verify_email_otp
 from app.models.user import User
 from app.models.token import Token
-from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest, VerifyOTPRequest, ResetPasswordRequest
+from app.schemas.auth import RegisterRequest, ChangePasswordRequest, TokenResponse, ForgetPasswordRequest, VerifyOTPRequest, ResetPasswordRequest, LogoutResponse
 from app.schemas.user import UserResponse, RegisterResponse
 from datetime import datetime, timedelta
 import secrets
@@ -51,6 +51,18 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Check if token exists in database and is not expired
+    token_record = db.query(Token).filter(
+        Token.token == token,
+        Token.expiry_date > datetime.utcnow()
+    ).first()
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been invalidated or expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     email: str = payload.get("sub")
     if email is None:
         raise HTTPException(
@@ -72,62 +84,72 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
 
 
 def send_reset_email(to_email: str, reset_code: str):
-    subject = "Your Password Reset Code"
+    try:
+        subject = "Your Password Reset Code"
 
-    body = f"""
-    <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <p>We received a request to reset your password.</p>
-            <p>Please use the following reset code:</p>
-            <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
-                {reset_code}
-            </h2>
-            <p>This code will expire in <b>15 minutes</b>.</p>
-            <br>
-            <p>If you did not request a password reset, please ignore this email.</p>
-        </body>
-    </html>
-    """
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <p>We received a request to reset your password.</p>
+                <p>Please use the following reset code:</p>
+                <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
+                    {reset_code}
+                </h2>
+                <p>This code will expire in <b>15 minutes</b>.</p>
+                <br>
+                <p>If you did not request a password reset, please ignore this email.</p>
+            </body>
+        </html>
+        """
 
-    msg = MIMEMultipart("alternative")
-    msg["From"] = settings.smtp_user
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "html"))
+        msg = MIMEMultipart("alternative")
+        msg["From"] = settings.smtp_user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
 
-    with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
-        server.starttls()
-        server.login(settings.smtp_user, settings.smtp_password)
-        server.sendmail(settings.smtp_user, to_email, msg.as_string())
+        with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
+            server.starttls()
+            server.login(settings.smtp_user, settings.smtp_password)
+            server.sendmail(settings.smtp_user, to_email, msg.as_string())
+    except Exception as e:
+        # Log the error but don't fail the endpoint
+        print(f"Failed to send email: {str(e)}")
+        pass
 
 
 def send_verify_email_otp(to_email: str, reset_code: str):
-    subject = "Your Verification Code"
+    try:
+        subject = "Your Verification Code"
 
-    body = f"""
-    <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <p>We received a request to register an account.</p>
-            <p>Please use the following verification code:</p>
-            <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
-                {reset_code}
-            </h2>
-            <p>This code will expire in <b>15 minutes</b>.</p>
-            <br>
-            <p>If you did not request to register, please ignore this email.</p>
-        </body>
-    </html>
-    """
-    msg = MIMEMultipart("alternative")
-    msg["From"] = settings.smtp_user
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "html"))
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <p>We received a request to register an account.</p>
+                <p>Please use the following verification code:</p>
+                <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
+                    {reset_code}
+                </h2>
+                <p>This code will expire in <b>15 minutes</b>.</p>
+                <br>
+                <p>If you did not request to register, please ignore this email.</p>
+            </body>
+        </html>
+        """
+        msg = MIMEMultipart("alternative")
+        msg["From"] = settings.smtp_user
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
 
-    with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
-        server.starttls()
-        server.login(settings.smtp_user, settings.smtp_password)
-        server.sendmail(settings.smtp_user, to_email, msg.as_string())
+        with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
+            server.starttls()
+            server.login(settings.smtp_user, settings.smtp_password)
+            server.sendmail(settings.smtp_user, to_email, msg.as_string())
+    except Exception as e:
+        # Log the error but don't fail the endpoint
+        print(f"Failed to send verification email: {str(e)}")
+        pass
 
 @router.post("/register", response_model=RegisterResponse)
 def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
@@ -277,4 +299,51 @@ def login(email: str = Form(), password: str = Form(), db: Session = Depends(get
         )
 
     access_token = create_access_token(data={"sub": user.email})
+
+    # Store token in database for logout tracking
+    token_record = Token(
+        token=access_token,
+        expiry_date=datetime.utcnow() + timedelta(minutes=15),  # Same as token expiry
+        user_id=user.id
+    )
+    db.add(token_record)
+    db.commit()
+
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout", response_model=LogoutResponse)
+def logout(
+    current_user: User = Depends(get_current_user),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication scheme",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header format",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Find and delete the token from database to invalidate it
+    token_record = db.query(Token).filter(Token.token == token).first()
+    if token_record:
+        db.delete(token_record)
+        db.commit()
+
+    return {"message": "Successfully logged out"}
