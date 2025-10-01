@@ -5,7 +5,12 @@
       "Bash(docker-compose:*)",
       "Bash(curl:*)",
       "Bash(docker exec:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Read(//mnt/d/**)",
+      "Bash(sudo service:*)",
+      "Bash(cd:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker logs:*)"
     ],
     "deny": [],
     "ask": []
