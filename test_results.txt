@@ -1,0 +1,152 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-7.4.3, pluggy-1.6.0 -- /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be
+configfile: pytest.ini
+plugins: anyio-3.7.1, asyncio-0.21.1
+asyncio: mode=Mode.STRICT
+collecting ... collected 35 items
+
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_success PASSED [  2%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_duplicate_email PASSED [  5%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_invalid_email_format PASSED [  8%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_missing_required_fields PASSED [ 11%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_empty_name PASSED [ 14%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_empty_password PASSED [ 17%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_multiple_users PASSED [ 20%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_special_characters_in_name PASSED [ 22%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_long_name PASSED [ 25%]
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_case_sensitive_email PASSED [ 28%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_success PASSED [ 31%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_without_token PASSED [ 34%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_invalid_token PASSED [ 37%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_expired_token PASSED [ 40%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_removes_all_tokens PASSED [ 42%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_cannot_use_deleted_account PASSED [ 45%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_with_multiple_users PASSED [ 48%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_token_not_in_database PASSED [ 51%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_invalid_authorization_format PASSED [ 54%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_empty_bearer_token PASSED [ 57%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_wrong_scheme PASSED [ 60%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_idempotency PASSED [ 62%]
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_cascade_tokens PASSED [ 65%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_success PASSED [ 68%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_without_token PASSED [ 71%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_invalid_token_format PASSED [ 74%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_invalid_bearer_scheme PASSED [ 77%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_malformed_token PASSED [ 80%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_expired_token PASSED [ 82%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_token_not_in_database PASSED [ 85%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_user_not_found PASSED [ 88%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_empty_authorization_header PASSED [ 91%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_only_bearer_no_token PASSED [ 94%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_multiple_users PASSED [ 97%]
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_case_sensitivity PASSED [100%]
+
+=============================== warnings summary ===============================
+venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:268
+venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:268
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:268: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+app/core/database.py:8
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/app/core/database.py:8: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+app/main.py:29
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/app/main.py:29: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+venv/lib/python3.12/site-packages/fastapi/applications.py:4547
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/venv/lib/python3.12/site-packages/fastapi/applications.py:4547: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_success
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_empty_name
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_empty_password
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_multiple_users
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_multiple_users
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_multiple_users
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_special_characters_in_name
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_long_name
+tests/test_auth_register.py::TestRegisterEndpoint::test_register_case_sensitive_email
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/app/api/v1/auth.py:177: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    email_verification_expiration=datetime.utcnow() + timedelta(hours=24)
+
+tests/test_user_delete_me.py: 9 warnings
+tests/test_user_get_me.py: 5 warnings
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/app/core/security.py:35: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expire = datetime.utcnow() + timedelta(minutes=15)
+
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_success
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_cannot_use_deleted_account
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_idempotency
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_success
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/conftest.py:108: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+tests/test_user_delete_me.py: 10 warnings
+tests/test_user_get_me.py: 6 warnings
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/venv/lib/python3.12/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+tests/test_user_delete_me.py: 9 warnings
+tests/test_user_get_me.py: 5 warnings
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/app/api/v1/auth.py:57: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    Token.expiry_date > datetime.utcnow()
+
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_expired_token
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_expired_token
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/app/core/security.py:33: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expire = datetime.utcnow() + expires_delta
+
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_account_expired_token
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_delete_me.py:65: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() - timedelta(minutes=10),
+
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_removes_all_tokens
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_removes_all_tokens
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_removes_all_tokens
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_delete_me.py:88: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_with_multiple_users
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_delete_me.py:138: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+tests/test_user_delete_me.py::TestDeleteUserMeEndpoint::test_delete_user_cascade_tokens
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_delete_me.py:222: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_expired_token
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_get_me.py:78: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() - timedelta(minutes=10),
+
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_user_not_found
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_get_me.py:115: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_multiple_users
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_get_me.py:153: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+tests/test_user_get_me.py::TestGetUserMeEndpoint::test_get_user_profile_case_sensitivity
+  /mnt/d/Đại Học/Do_An_Tot_Nghiep/bacopilot-be/tests/test_user_get_me.py:177: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expiry_date=datetime.utcnow() + timedelta(minutes=15),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 35 passed, 75 warnings in 9.62s ========================

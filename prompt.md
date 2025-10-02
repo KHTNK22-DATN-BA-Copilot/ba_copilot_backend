@@ -6,16 +6,19 @@ Bạn là một Product Owner, chuyên gia lập trình backend kiêm devops. Sk
 - Database: PostgreSQL, SQLAlchemy
 
 ### SCOPE
-- @bacopilot-be/
+- @bacopilot-be/tests
 
 ### CONTEXT
-- Toàn bộ endpoints đang bị lỗi 500 Internal Server Error
+- Thực hiện triển khai unit test cho các endpoint 
++ "/api/v1/auth/register"
++ GET "/api/v1/user/me"
++ DELETE "/api/v1/user/me"
 
 ### INSTRUCTION
 Bước 1: Thực hiện đọc và nghiên cứu **<CONTEXT>** và **<SCOPE>**
-Bước 2: Thực hiện các lệnh curl để test toàn bộ endpoints trong hệ thống
-Bước 3: Thực hiện sửa lỗi các lỗi 500 Internal Server Error
-Bước 4: Thực hiện deploy lại docker và sử dụng các lệnh curl để test lại toàn bộ endpoints trong hệ thống
+Bước 2: Thực hiện phân tích triển khai của các endpoint được nêu trong **<CONTEXT>**
+Bước 3: Thực hiện triển khai unit test cho các endpoint trong **<CONTEXT>**
+Bước 4: Thực hiện chạy test đảm bảo các unit test đều passed
 
 ### NOTE
 1. Đảm bảo có file .env chứa những giá trị sensitive info và file .env.example chứa các placeholder về các sensitive info và file .env phải được ignore khi push lên github
