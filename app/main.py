@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth
+from app.api.v1 import auth, user
 from app.core.database import engine, Base
 import logging
 import time
@@ -14,6 +14,7 @@ app = FastAPI(title="BaCopilot Authentication API", version="1.0.0")
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 
 # Configure CORS
 app.add_middleware(

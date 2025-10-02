@@ -29,3 +29,10 @@ class RegisterResponse(BaseModel):
     
 class UserInDB(UserResponse):
     passwordhash: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+class UserDeleteResponse(BaseModel):
+    message: str
