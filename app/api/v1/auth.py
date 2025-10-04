@@ -283,7 +283,7 @@ def reset_password(
     user.passwordhash = get_password_hash(reset_data.new_password)
     user.reset_code = None
     user.reset_code_expiration = None
-
+    
     db.commit()
     db.refresh(user)
 
