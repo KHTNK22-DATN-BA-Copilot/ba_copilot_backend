@@ -15,6 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
 from fastapi import Query
+from app.core.mailer import send_reset_email, send_verify_email_otp
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
@@ -82,74 +83,73 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
     return user
 
 
+# def send_reset_email(to_email: str, reset_code: str):
+#     try:
+#         subject = "Your Password Reset Code"
 
-def send_reset_email(to_email: str, reset_code: str):
-    try:
-        subject = "Your Password Reset Code"
+#         body = f"""
+#         <html>
+#             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+#                 <p>We received a request to reset your password.</p>
+#                 <p>Please use the following reset code:</p>
+#                 <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
+#                     {reset_code}
+#                 </h2>
+#                 <p>This code will expire in <b>15 minutes</b>.</p>
+#                 <br>
+#                 <p>If you did not request a password reset, please ignore this email.</p>
+#             </body>
+#         </html>
+#         """
 
-        body = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <p>We received a request to reset your password.</p>
-                <p>Please use the following reset code:</p>
-                <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
-                    {reset_code}
-                </h2>
-                <p>This code will expire in <b>15 minutes</b>.</p>
-                <br>
-                <p>If you did not request a password reset, please ignore this email.</p>
-            </body>
-        </html>
-        """
+#         msg = MIMEMultipart("alternative")
+#         msg["From"] = settings.smtp_user
+#         msg["To"] = to_email
+#         msg["Subject"] = subject
+#         msg.attach(MIMEText(body, "html"))
 
-        msg = MIMEMultipart("alternative")
-        msg["From"] = settings.smtp_user
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "html"))
-
-        with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(settings.smtp_user, to_email, msg.as_string())
-    except Exception as e:
-        # Log the error but don't fail the endpoint
-        print(f"Failed to send email: {str(e)}")
-        pass
+#         with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
+#             server.starttls()
+#             server.login(settings.smtp_user, settings.smtp_password)
+#             server.sendmail(settings.smtp_user, to_email, msg.as_string())
+#     except Exception as e:
+#         # Log the error but don't fail the endpoint
+#         print(f"Failed to send email: {str(e)}")
+#         pass
 
 
-def send_verify_email_otp(to_email: str, reset_code: str):
-    try:
-        subject = "Your Verification Code"
+# def send_verify_email_otp(to_email: str, reset_code: str):
+#     try:
+#         subject = "Your Verification Code"
 
-        body = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <p>We received a request to register an account.</p>
-                <p>Please use the following verification code:</p>
-                <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
-                    {reset_code}
-                </h2>
-                <p>This code will expire in <b>15 minutes</b>.</p>
-                <br>
-                <p>If you did not request to register, please ignore this email.</p>
-            </body>
-        </html>
-        """
-        msg = MIMEMultipart("alternative")
-        msg["From"] = settings.smtp_user
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "html"))
+#         body = f"""
+#         <html>
+#             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+#                 <p>We received a request to register an account.</p>
+#                 <p>Please use the following verification code:</p>
+#                 <h2 style="color: #2c3e50; font-size: 28px; letter-spacing: 3px; text-align: center;">
+#                     {reset_code}
+#                 </h2>
+#                 <p>This code will expire in <b>15 minutes</b>.</p>
+#                 <br>
+#                 <p>If you did not request to register, please ignore this email.</p>
+#             </body>
+#         </html>
+#         """
+#         msg = MIMEMultipart("alternative")
+#         msg["From"] = settings.smtp_user
+#         msg["To"] = to_email
+#         msg["Subject"] = subject
+#         msg.attach(MIMEText(body, "html"))
 
-        with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(settings.smtp_user, to_email, msg.as_string())
-    except Exception as e:
-        # Log the error but don't fail the endpoint
-        print(f"Failed to send verification email: {str(e)}")
-        pass
+#         with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
+#             server.starttls()
+#             server.login(settings.smtp_user, settings.smtp_password)
+#             server.sendmail(settings.smtp_user, to_email, msg.as_string())
+#     except Exception as e:
+#         # Log the error but don't fail the endpoint
+#         print(f"Failed to send verification email: {str(e)}")
+#         pass
 
 @router.post("/register", response_model=RegisterResponse)
 def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
@@ -201,7 +201,7 @@ def verify_email_by_otp(
     user.email_verification_token = None
     user.email_verification_expiration = None
     return {"message": "OTP verified successfully"}
-    
+
 
 @router.post("/change-password")
 def change_password(

@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     smtp_port: int
     smtp_user: str
     smtp_password: str
-    
+
+    sendgrid_api_key: str
+    sendgrid_from_email: str
+
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
