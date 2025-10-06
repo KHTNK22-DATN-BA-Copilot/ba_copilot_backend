@@ -81,5 +81,10 @@ logs/*.log
 *.tmp
 *.temp
 fixed*
-test*
+test_*.tmp
+test_*.temp
 *old
+
+# Allow tests folder but ignore temporary test files
+!tests/
+!test_*.py
