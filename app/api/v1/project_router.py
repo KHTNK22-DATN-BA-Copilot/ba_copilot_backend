@@ -81,7 +81,11 @@ async def update_project(
 ):
     project = (
         db.query(Project)
-        .filter(Project.id == project_id, Project.user_id == current_user.id)
+        .filter(
+            Project.id == project_id,
+            Project.user_id == current_user.id,
+            Project.status != "deleted",
+        )
         .first()
     )
     if not project:
@@ -105,7 +109,11 @@ async def delete_project(
 ):
     project = (
         db.query(Project)
-        .filter(Project.id == project_id, Project.user_id == current_user.id)
+        .filter(
+            Project.id == project_id,
+            Project.user_id == current_user.id,
+            Project.status != "deleted",
+        )
         .first()
     )
     if not project:
