@@ -18,11 +18,20 @@ class Project(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # relationships
+    # Relationships
     user = relationship("User", back_populates="projects")
-    files = relationship(
-        "ProjectFile", back_populates="project", cascade="all, delete-orphan"
-    )
     documents = relationship(
         "SRS", back_populates="project", cascade="all, delete-orphan"
+    )
+    wireframes = relationship(
+        "Wireframe", back_populates="project", cascade="all, delete-orphan"
+    )
+    diagrams = relationship(
+        "Diagram", back_populates="project", cascade="all, delete-orphan"
+    )
+    conversations = relationship(
+        "Conversation", back_populates="project", cascade="all, delete-orphan"
+    )
+    files = relationship(
+        "ProjectFile", back_populates="project", cascade="all, delete-orphan"
     )
