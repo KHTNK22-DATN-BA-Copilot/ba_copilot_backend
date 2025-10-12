@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.srs import SRS
 from app.models.user import User
-from app.schemas.srs import SRSGenerateResponse, SRSRequest
+from app.schemas.srs import SRSGenerateResponse
 from app.utils.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
@@ -28,10 +28,13 @@ async def upload_to_supabase(file: UploadFile) -> str | None:
         file_data = await file.read()
 
         res = supabase.storage.from_(SUPABASE_BUCKET).upload(file_name, file_data)
-        if res.status_code not in (200, 201):
-            logger.error(f"Failed to upload {file.filename}: {res}")
-            return None
 
+        
+        # Kiểm tra upload thành công
+        if not res.path:
+            logger.error(f"Failed to upload {file.filename}")
+            return None
+        # Lấy public URL
         public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(file_name)
         logger.info(f"Uploaded {file.filename} to Supabase → {public_url}")
         return public_url
@@ -56,7 +59,7 @@ async def call_ai_service(payload: dict, retries: int = 3, timeout: int = 120):
             )
         except (httpx.ConnectError, httpx.ReadTimeout) as e:
             logger.warning(f"AI request failed (attempt {attempt}/{retries}): {e}")
-            await asyncio.sleep(2 * attempt)  # exponential backoff
+            await asyncio.sleep(2 * attempt)
 
     raise HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
@@ -66,21 +69,24 @@ async def call_ai_service(payload: dict, retries: int = 3, timeout: int = 120):
 
 @router.post("/generate", response_model=SRSGenerateResponse)
 async def generate_srs(
-    srsRequest: SRSRequest,
+    project_id: int = Form(...),
+    project_name: str = Form(...),
+    description: str = Form(...),
+    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload files lên Supabase, gọi AI service để tạo tài liệu SRS,
+    Upload file lên Supabase, gọi AI service để tạo SRS,
     sau đó lưu document vào DB.
     """
     logger.info(
-        f"User {current_user.email} requested SRS generation for {srsRequest.project_name}"
+        f"User {current_user.email} requested SRS generation for {project_name}"
     )
 
     # Upload tất cả file lên Supabase
     file_urls: List[str] = []
-    for file in srsRequest.files:
+    for file in files:
         url = await upload_to_supabase(file)
         if not url:
             raise HTTPException(
@@ -89,16 +95,16 @@ async def generate_srs(
             )
         file_urls.append(url)
 
-    # Chuẩn bị payload cho AI service
+
     ai_payload = {
-        "project_input": srsRequest.description,
+        "project_input": description,
+        "file_urls": file_urls,  
     }
 
-    print(ai_payload)
-    # Gọi AI service (retry + timeout)
+    # Gọi AI service
     ai_data = await call_ai_service(ai_payload)
 
-    # Parse & validate response
+    # Validate response
     required_fields = ["document", "generated_at", "status"]
     for field in required_fields:
         if field not in ai_data:
@@ -110,9 +116,9 @@ async def generate_srs(
 
     # Lưu document vào DB
     new_doc = SRS(
-        project_id=srsRequest.project_id,
-        project_name=srsRequest.project_name,
-        content_markdown=json.dumps(ai_data["document"]),  # serialize dict -> string
+        project_id=project_id,
+        project_name=project_name,
+        content_markdown=json.dumps(ai_data["document"]),
         status=ai_data.get("status", "generated"),
         document_metadata={
             "generated_at": ai_data["generated_at"],
@@ -124,14 +130,13 @@ async def generate_srs(
     db.commit()
     db.refresh(new_doc)
 
-    logger.info(f"SRS generated and saved for project '{srsRequest.project_name}'")
+    logger.info(f"SRS generated and saved for project '{project_name}'")
 
-    # Trả về response cho client
     return SRSGenerateResponse(
         document_id=str(new_doc.document_id),
         user_id=str(current_user.id),
         generated_at=ai_data["generated_at"],
-        input_description=srsRequest.description,
+        input_description=description,
         document=ai_data["document"],
         status=new_doc.status,
     )
