@@ -1,20 +1,15 @@
 from pydantic import BaseModel, Field
-from typing import Annotated, Dict, Any, Optional
+from typing import Annotated, Dict, Any, Optional, List
 
 
 class SRSRequest(BaseModel):
     project_id: int
-    user_id: int
     project_name: str
-    description: str
-    project_file_paths: Annotated[
-        list[str],
-        Field(
-            min_length=1,
-            max_length=5,
-            description="List of file paths (maximum 5 files)",
-        ),
-    ]
+    description: str = Field(..., description="Project description or context")
+    files: Optional[List[str]] = Field(
+        None,
+        description="List of base64-encoded file contents or text extracted from uploaded documents",
+    )
 
 
 class SRSGenerateResponse(BaseModel):
