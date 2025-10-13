@@ -29,3 +29,21 @@ class SRSGenerateResponse(BaseModel):
         ..., description="Generated SRS document in JSON format"
     )
     status: str = Field(..., description="Generation status")
+
+
+class SRSDocument(BaseModel):
+    """SRS document model."""
+
+    document_id: str
+    project_name: str
+    content: str
+    metadata: Dict[str, Any]
+
+
+class SRSExportResponse(BaseModel):
+    """SRS export response model."""
+
+    download_url: str
+    expires_at: str
+    file_size_bytes: int
+    format: str
