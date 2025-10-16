@@ -114,9 +114,13 @@ This test script verifies:
 [INFO]   - User Profile: ✅
 [INFO]   - Project Creation: ✅
 [INFO]   - SRS Generation: ✅
-[INFO]   - AI Service (Non-Fallback): ✅ (Provider: openrouter)
+[INFO]   - AI Service (Non-Fallback): ✅ (Provider: ...)
 [INFO]   - Document Structure: ✅
 [INFO] ================================================================================
+
+[INFO]
+The SRS documents received:
+{...}
 ```
 
 ### Test AI Service Directly
@@ -314,51 +318,6 @@ docker-compose logs -f ai
 docker-compose logs -f postgres
 ```
 
-### Troubleshooting
+---
 
-#### Services not healthy
-
-```powershell
-# Check service status
-docker-compose ps
-
-# Restart services
-docker-compose restart
-
-# Rebuild if needed
-docker-compose down -v
-docker-compose up -d --build
-```
-
-#### Database connection issues
-
-```powershell
-# Check postgres logs
-docker-compose logs postgres
-
-# Verify database is accepting connections
-docker-compose exec postgres pg_isready -U <username>
-```
-
-#### AI service returning fallback responses
-
-1. Check AI service logs:
-
-   ```powershell
-   docker-compose logs ai
-   ```
-
-2. Verify OpenRouter API key is set in `ba_copilot_ai` service
-
-3. Test AI service directly:
-   ```powershell
-   python ..\test_ai_direct.py
-   ```
-
-## License
-
-[Your License Here]
-
-## Contributors
-
-[Your Contributors Here]
+**Built with ❤️ by the BA Backend Team**
