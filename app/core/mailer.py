@@ -66,6 +66,7 @@ def send_verify_email_otp(to_email: str, reset_code: str):
         )
 
         sg = SendGridAPIClient(settings.sendgrid_api_key)
+        print(sg)
         response = sg.send(message)
         print(
             f"Verification email sent to {to_email}, status: {response.status_code}"
