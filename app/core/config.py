@@ -10,11 +10,6 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str
 
-    smtp_server: str
-    smtp_port: int
-    smtp_user: str
-    smtp_password: str
-
     sendgrid_api_key: str
     sendgrid_from_email: str
 

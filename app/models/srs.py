@@ -11,6 +11,7 @@ class SRS(Base):
 
     document_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     project_name = Column(String(255), nullable=False)
     content_markdown = Column(Text, nullable=False)
     status = Column(String(32), default="generated", nullable=False)
