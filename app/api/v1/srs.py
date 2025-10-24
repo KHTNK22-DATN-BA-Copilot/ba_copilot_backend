@@ -13,7 +13,8 @@ from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.srs import SRS
 from app.models.user import User
-from app.schemas.srs import SRSGenerateResponse, SRSDocument, SRSExportResponse
+from app.models.project_file import ProjectFile
+from app.schemas.srs import SRSGenerateResponse,GetSRSResponse,SRSListResponse
 from app.utils.supabase_client import supabase
 from app.utils.srs_utils import (
     upload_to_supabase,
@@ -54,7 +55,18 @@ async def generate_srs(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to upload file {file.filename}",
             )
+
+        new_file = ProjectFile(
+            file_path=url,
+            project_id=project_id,
+            user_id=current_user.id
+        )
+        db.add(new_file)
         file_urls.append(url)
+
+    db.commit()
+    for file in db.query(ProjectFile).filter(ProjectFile.project_id == project_id).all():
+        db.refresh(file)
 
     ai_payload = {
         "project_input": description,
@@ -74,11 +86,11 @@ async def generate_srs(
                 detail=f"AI service returned invalid response: missing {field}",
             )
 
-    # Lưu document vào DB
     markdown_content = format_srs_to_markdown(ai_data["document"])
 
     new_doc = SRS(
         project_id=project_id,
+        user_id=current_user.id,
         project_name=project_name,
         content_markdown=json.dumps(ai_data["document"]),
         status=ai_data.get("status", "generated"),
@@ -99,28 +111,66 @@ async def generate_srs(
         user_id=str(current_user.id),
         generated_at=ai_data["generated_at"],
         input_description=description,
-        document=ai_data["document"],
+        document=markdown_content,
         status=new_doc.status,
     )
 
-@router.get("/export/{document_id}", response_class=StreamingResponse)
-async def export_markdown(document_id: str, db: Session = Depends(get_db)):
-    print(document_id)
-    srs_doc = db.query(SRS).filter(SRS.document_id == document_id).first()
+
+@router.get("/list/{project_id}", response_model=SRSListResponse)
+async def list_SRS(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    srs_list = (
+        db.query(SRS)
+        .filter(SRS.user_id == current_user.id, SRS.project_id == project_id)
+        .all()
+    )
+
+    result = []
+    for srs_doc in srs_list:
+        try:
+            content_dict = json.loads(srs_doc.content_markdown)
+            markdown_content = format_srs_to_markdown(content_dict)
+        except Exception:
+            markdown_content = srs_doc.content_markdown or ""
+
+        result.append(
+            GetSRSResponse(
+                document_id=str(srs_doc.document_id),
+                project_name=srs_doc.project_name,
+                content=markdown_content,
+                status=srs_doc.status,
+                updated_at=srs_doc.updated_at,
+            )
+        )
+
+    return {"SRSs": result}
+
+
+@router.get("/get/{project_id}/{document_id}", response_model=GetSRSResponse)
+async def get_srs_document(
+    project_id: str,
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    srs_doc = (
+        db.query(SRS)
+        .filter(SRS.project_id == project_id, SRS.document_id == document_id, SRS.user_id==current_user.id)
+        .first()
+    )
     if not srs_doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
     content_dict = json.loads(srs_doc.content_markdown)
-
     markdown_content = format_srs_to_markdown(content_dict)
 
-    print(markdown_content)
-    file_stream = BytesIO(markdown_content.encode("utf-8"))
-    filename = f"{srs_doc.project_name.replace(' ', '_')}.md"
-
-    
-    return StreamingResponse(
-        file_stream,
-        media_type="text/markdown",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    return GetSRSResponse(
+        document_id=str(srs_doc.document_id),
+        project_name=srs_doc.project_name,
+        content=markdown_content,
+        status=srs_doc.status,
+        updated_at=srs_doc.updated_at,
     )

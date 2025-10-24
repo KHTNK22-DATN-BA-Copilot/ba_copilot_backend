@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Annotated, Dict, Any, Optional, List
+from datetime import datetime
 
 
 class SRSRequest(BaseModel):
@@ -25,10 +26,21 @@ class SRSGenerateResponse(BaseModel):
     input_description: str = Field(
         ..., description="Original input used for generation"
     )
-    document: Dict[str, Any] = Field(
-        ..., description="Generated SRS document in JSON format"
+    document: str = Field(
+        ..., description="Generated SRS document in Markdown format"
     )
     status: str = Field(..., description="Generation status")
+
+class GetSRSResponse(BaseModel):
+    document_id:str
+    project_name:str
+    content:str
+    status: str
+    updated_at: datetime
+
+
+class SRSListResponse(BaseModel):
+    SRSs: List[GetSRSResponse] = Field(..., description="List of srs document")
 
 
 class SRSDocument(BaseModel):
