@@ -174,3 +174,35 @@ async def get_srs_document(
         status=srs_doc.status,
         updated_at=srs_doc.updated_at,
     )
+
+
+@router.get("/export/{project_id}/{document_id}", response_class=StreamingResponse)
+async def export_markdown(
+    project_id: str,
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    srs_doc = (
+        db.query(SRS)
+        .filter(
+            SRS.project_id == project_id,
+            SRS.document_id == document_id,
+            SRS.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not srs_doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    content_dict = json.loads(srs_doc.content_markdown)
+    markdown_content = format_srs_to_markdown(content_dict)
+
+    file_stream = BytesIO(markdown_content.encode("utf-8"))
+    filename = f"{srs_doc.project_name.replace(' ', '_')}.md"
+
+    return StreamingResponse(
+        file_stream,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
