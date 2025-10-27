@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.project import Project
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 router = APIRouter()
 
@@ -28,6 +28,15 @@ async def create_project(
         name=body.name,
         description=body.description,
         status=body.status if hasattr(body, "status") else "active",
+        team_size=body.team_size if hasattr(body, "team_size") else 1,
+        due_date=(
+            body.due_date
+            if hasattr(body, "due_date")
+            else datetime.now(timezone.utc) + timedelta(days=30)
+        ),
+        project_priority=(
+            body.project_priority if hasattr(body, "project_priority") else "low"
+        ),
         settings=body.settings if hasattr(body, "settings") else {},
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -93,7 +102,10 @@ async def update_project(
     project.name = body.name
     project.description = body.description
     project.status = body.status
+    project.team_size=body.team_size
+    project.project_priority=body.project_priority
     project.settings = body.settings
+    project.due_date=body.due_date
     project.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(project)
