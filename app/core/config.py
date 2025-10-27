@@ -1,8 +1,14 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional, List
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="ignore"  # Ignore extra fields in .env
+    )
+
     database_url: str
     db_host: str = "localhost"
     db_port: int = 5432
@@ -10,8 +16,8 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str
 
-    sendgrid_api_key: str
-    sendgrid_from_email: str
+    sendgrid_api_key: Optional[str] = None
+    sendgrid_from_email: Optional[str] = None
 
     secret_key: str
     algorithm: str = "HS256"
@@ -23,13 +29,10 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8010
 
-    frontend_url: List[str]
+    frontend_url: Optional[List[str]] = None
 
-    supabase_url: str
-    supabase_key: str
-
-    class Config:
-        env_file = ".env"
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
 
 
 settings = Settings()
