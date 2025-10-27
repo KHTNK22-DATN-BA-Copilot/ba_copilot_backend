@@ -13,3 +13,5 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.26
 sendgrid==6.12.5
+docx2txt==0.9
+PyPDF2==3.0.1
