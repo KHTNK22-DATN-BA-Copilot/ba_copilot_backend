@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.project_file import ProjectFile
 from app.schemas.srs import SRSGenerateResponse,GetSRSResponse,SRSListResponse
 from app.utils.supabase_client import supabase
+from app.core.config import settings
 from app.utils.srs_utils import (
     upload_to_supabase,
     call_ai_service,
@@ -86,7 +87,7 @@ async def generate_srs(
 
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
-    ai_data = await call_ai_service(ai_payload)
+    ai_data = await call_ai_service(settings.ai_service_url_srs,ai_payload)
 
     # Validate response
     # required_fields = ["document", "generated_at", "status"]
@@ -108,6 +109,7 @@ async def generate_srs(
         status=ai_data.get("status", "generated"),
         document_metadata={
             "files": file_urls,
+            "message":combined_input,
             "ai_response": ai_data,
         },
     )
@@ -121,7 +123,7 @@ async def generate_srs(
         document_id=str(new_doc.document_id),
         user_id=str(current_user.id),
         generated_at=str(generate_at),
-        input_description=description,
+        input_description=combined_input,
         document=markdown_content,
         status=new_doc.status,
     )

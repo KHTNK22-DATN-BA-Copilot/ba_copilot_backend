@@ -14,7 +14,6 @@ import re
 
 logger = logging.getLogger(__name__)
 
-AI_SERVICE_URL = "http://ai:8000/api/v1/srs/generate"
 SUPABASE_BUCKET = "uploads"
 
 
@@ -63,12 +62,12 @@ async def extract_text_from_file(file: UploadFile) -> str:
     return content
 
 
-async def call_ai_service(payload: dict, retries: int = 3, timeout: int = 120):
+async def call_ai_service(ai_service_url:str,payload: dict, retries: int = 3, timeout: int = 120):
     """Gọi AI service với retry & timeout logic."""
     for attempt in range(1, retries + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(AI_SERVICE_URL, json=payload)
+                response = await client.post(ai_service_url, json=payload)
 
             if response.status_code == 200:
                 return response.json()
