@@ -20,10 +20,10 @@ from app.utils.supabase_client import supabase
 from app.core.config import settings
 from app.utils.srs_utils import (
     upload_to_supabase,
-    call_ai_service,
     format_srs_to_markdown,
     extract_text_from_file,
 )
+from app.utils.call_ai_service import call_ai_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -48,7 +48,6 @@ async def generate_srs(
 
     # Upload tất cả file lên Supabase
     file_urls: List[str] = []
-    file_texts: List[str] = []
 
     for file in files:
         url = await upload_to_supabase(file)
@@ -66,38 +65,20 @@ async def generate_srs(
         db.add(new_file)
         file_urls.append(url)
 
-        text_content = await extract_text_from_file(file)
-        file_texts.append(f"### File: {file.filename}\n{text_content}\n")
-
     db.commit()
     for file in db.query(ProjectFile).filter(ProjectFile.project_id == project_id).all():
         db.refresh(file)
 
-    combined_input = f"""
-    Project Description:
-    {description}
-
-    Attached Files Content:
-    {''.join(file_texts)}
-    """
+    
 
     ai_payload = {
-        "message": combined_input,
+        "user_message": description,
     }
 
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
-    ai_data = await call_ai_service(settings.ai_service_url_srs,ai_payload)
+    ai_data = await call_ai_service(settings.ai_service_url_srs,ai_payload,files)
 
-    # Validate response
-    # required_fields = ["document", "generated_at", "status"]
-    # for field in required_fields:
-    #     if field not in ai_data:
-    #         logger.error(f"Invalid AI response, missing field: {field}")
-    #         raise HTTPException(
-    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             detail=f"AI service returned invalid response: missing {field}",
-    #         )
 
     markdown_content = format_srs_to_markdown(ai_data["response"])
 
@@ -109,7 +90,7 @@ async def generate_srs(
         status=ai_data.get("status", "generated"),
         document_metadata={
             "files": file_urls,
-            "message":combined_input,
+            "message":description,
             "ai_response": ai_data,
         },
     )
@@ -123,7 +104,7 @@ async def generate_srs(
         document_id=str(new_doc.document_id),
         user_id=str(current_user.id),
         generated_at=str(generate_at),
-        input_description=combined_input,
+        input_description=description,
         document=markdown_content,
         status=new_doc.status,
     )

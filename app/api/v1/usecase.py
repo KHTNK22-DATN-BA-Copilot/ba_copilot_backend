@@ -7,22 +7,21 @@ from fastapi import (
     UploadFile,
     File,
     Form,
-    Query,
 )
+
 from fastapi.responses import StreamingResponse
-from io import BytesIO
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import List
-import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.wireframe import Wireframe
+from app.models.diagram import Diagram
 from app.models.user import User
 from app.models.project_file import ProjectFile
-from app.utils.supabase_client import supabase
 from app.core.config import settings
-from app.schemas.wireframe import WireframeGenerateResponse
+from app.schemas.diagram import DiagramGenerateResponse, DiagramResponse
+from app.utils.mock_data.diagram_mock_data import get_mock_data
+
 from app.utils.srs_utils import (
     upload_to_supabase,
 )
@@ -32,28 +31,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/generate", response_model=WireframeGenerateResponse)
-async def generate_wireframe(
+@router.post("/generate", response_model=DiagramGenerateResponse)
+async def generate_usecase_diagram(
     project_id: int = Form(...),
-    device_type: str = Form(...),
-    page_type: str = Form(...),
-    fidelity: str = Form(...),
-    wireframe_name: str = Form(...),
+    diagram_type: str = Form(...),
     description: str = Form(...),
-    require_components: str = Form(...),
-    color_schema:str=Form(...),
-    style:str=Form(...),
+    complexity:str=Form(...),
+    style: str = Form(...),
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     logger.info(
-        f"User {current_user.email} requested SRS generation for {wireframe_name}"
+        f"User {current_user.email} requested generation for {diagram_type} diagram"
     )
 
-    # Upload tất cả file lên Supabase
     file_urls: List[str] = []
-
+    
     for file in files:
         url = await upload_to_supabase(file)
         if not url:
@@ -68,6 +62,7 @@ async def generate_wireframe(
         db.add(new_file)
         file_urls.append(url)
 
+        
 
     db.commit()
     for file in (
@@ -77,45 +72,54 @@ async def generate_wireframe(
 
     combined_input = f"""
         Project Description:
-        This project involves creating a {fidelity} {page_type} wireframe for a {device_type} device.
-        The wireframe is named "{wireframe_name}" and follows the "{style}" design style with a {color_schema} color scheme.
+        This project involves creating a {complexity} {diagram_type} diagram.
+        The {diagram_type} diagram is followed the "{style}" design style.
 
         Key Requirements:
         - General Description: {description}
-        - Required Components: {require_components}
     """
-
+    title=f"{diagram_type} diagram belongs to project {project_id}"
     ai_payload = {
         "user_message": combined_input,
     }
 
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
-    ai_data = await call_ai_service(settings.ai_service_url_wireframe, ai_payload,files)
+    try:
+        ai_data = await call_ai_service(settings.ai_service_url_diagram_usecase, ai_payload,files)
+        ai_response = ai_data.get("response") if ai_data else None
 
-    new_doc = Wireframe(
+        if not ai_response or "diagram_content" not in ai_response:
+            raise ValueError("Invalid AI response format")
+
+    except Exception as e:
+        logger.error(f"AI service failed, using mock data. Error: {e}")
+        ai_data = {"response": get_mock_data(diagram_type)}
+        ai_response = ai_data["response"]
+
+    new_diagram = Diagram(
         project_id=project_id,
         user_id=current_user.id,
-        project_name=wireframe_name,
-        description = ai_data["response"]["description"],
-        html_content = ai_data["response"]["figma_link"],
-        template_type=page_type,
-        document_metadata={
-            "files": file_urls,
-            "ai_response": ai_data,
-        },
+        diagram_type=diagram_type,
+        title=title,
+        description=ai_data["response"]["description"],
+        mermaid_code=ai_data["response"]["diagram_content"],
     )
-    db.add(new_doc)
+    db.add(new_diagram)
     db.commit()
-    db.refresh(new_doc)
+    db.refresh(new_diagram)
 
-    logger.info(f"User {current_user.id} generated and saved for project '{wireframe_name}'")
+    logger.info(f"SRS generated and saved for project {diagram_type} diagram belong to project {project_id}")
 
-    return WireframeGenerateResponse(
-        wireframe_id=str(new_doc.wireframe_id),
+    return DiagramGenerateResponse(
+        diagram_id= str(new_diagram.diagram_id),
+        title=title,
+        diagram_type=diagram_type,
         user_id=str(current_user.id),
         generated_at=str(generate_at),
-        input_description=description,
-        figma_link=new_doc.html_content,
-        wireframe_description=new_doc.description,
+        input_description=combined_input,
+        mermaid_code=new_diagram.mermaid_code,
+        description=new_diagram.description
     )
+
+
