@@ -215,7 +215,7 @@ async def get_diagram(
         )
         if not diagram:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Diagram with id {diagram_id} not found",
             )
 
@@ -267,10 +267,8 @@ async def list_diagram(
         )
 
         if not diagram_list:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No diagrams found for project_id {project_id}",
-            )
+            return {"diagrams": []}
+
 
         result = []
         for diagram in diagram_list:
