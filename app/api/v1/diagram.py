@@ -176,3 +176,62 @@ async def get_diagram(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
         )
+
+
+@router.get("/list/{project_id}", response_model=DiagramListResponse)
+async def list_diagram(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        project = (
+            db.query(Project)
+            .filter(Project.id == project_id, Project.user_id == current_user.id)
+            .first()
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this project",
+            )
+
+        diagram_list = (
+            db.query(Diagram)
+            .filter(
+                Diagram.user_id == current_user.id,
+                Diagram.project_id == project_id,
+            )
+            .order_by(Diagram.updated_at.desc())
+            .all()
+        )
+
+        if not diagram_list:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No diagrams found for project_id {project_id}",
+            )
+
+        result = []
+        for diagram in diagram_list:
+            result.append(
+                DiagramResponse(
+                    diagram_id=str(diagram.diagram_id),
+                    title=diagram.title,
+                    diagram_type=diagram.diagram_type,
+                    update_at=str(diagram.updated_at),
+                    mermaid_code=diagram.mermaid_code,
+                    description=diagram.description,
+                )
+            )
+
+        return {"diagrams": result}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error fetching diagram list")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}",
+        )
