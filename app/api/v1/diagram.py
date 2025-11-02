@@ -41,9 +41,8 @@ router = APIRouter()
 async def generate_usecase_diagram(
     project_id: int = Form(...),
     diagram_type: str = Form(...),
+    title: str = Form(...),
     description: str = Form(...),
-    complexity:str=Form(...),
-    style: str = Form(...),
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -76,13 +75,12 @@ async def generate_usecase_diagram(
 
     combined_input = f"""
         Project Description:
-        This project involves creating a {complexity} {diagram_type} diagram.
-        The {diagram_type} diagram is followed the "{style}" design style.
+        This project involves creating a  {diagram_type} diagram.
 
         Key Requirements:
         - General Description: {description}
     """
-    title=f"{diagram_type} diagram belongs to project {project_id}"
+
     ai_payload = {
         "user_message": combined_input,
     }
@@ -90,7 +88,9 @@ async def generate_usecase_diagram(
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
     try:
-        ai_data = await call_ai_service(settings.ai_service_url_diagram_usecase, ai_payload,files)
+        ai_data = await call_ai_service(
+            settings.ai_service_url_diagram_usecase, ai_payload, files
+        )
         ai_response = ai_data.get("response") if ai_data else None
 
         if not ai_response or "diagram_content" not in ai_response:
@@ -113,17 +113,19 @@ async def generate_usecase_diagram(
     db.commit()
     db.refresh(new_diagram)
 
-    logger.info(f"SRS generated and saved for project {diagram_type} diagram belong to project {project_id}")
+    logger.info(
+        f"SRS generated and saved for project {diagram_type} diagram belong to project {project_id}"
+    )
 
     return DiagramGenerateResponse(
-        diagram_id= str(new_diagram.diagram_id),
+        diagram_id=str(new_diagram.diagram_id),
         title=title,
         diagram_type=diagram_type,
         user_id=str(current_user.id),
         generated_at=str(generate_at),
         input_description=combined_input,
         content_md=new_diagram.content_md,
-        description=new_diagram.description
+        description=new_diagram.description,
     )
 
 
