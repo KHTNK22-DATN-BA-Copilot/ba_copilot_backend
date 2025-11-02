@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth, user,srs,wireframe, project_router,usecase
-from app.models import project,project_file,conversation,diagram,message
+from app.api.v1 import auth, user,srs,wireframe, project_router,diagram
+from app.models import project,project_file,conversation,message
 from app.core.database import engine, Base
 import logging
 import time
@@ -19,7 +19,7 @@ app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 app.include_router(srs.router, prefix="/api/v1/srs", tags=["srs_generator"])
 app.include_router(wireframe.router, prefix="/api/v1/wireframe", tags=["wireframe_generator"])
 app.include_router(
-    usecase.router, prefix="/api/v1/diagram/usecase", tags=["diagram_generator"]
+    diagram.router, prefix="/api/v1/diagram", tags=["diagram_generator"]
 )
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
 
