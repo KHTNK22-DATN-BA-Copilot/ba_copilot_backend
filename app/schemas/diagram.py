@@ -16,23 +16,34 @@ class DiagramGenerateResponse(BaseModel):
     input_description: str = Field(
         ..., description="Original input used for generation"
     )
-    mermaid_code:str=Field(..., description="Diagram content")
+    content_md:str=Field(..., description="Diagram content")
     description: str = Field(
         ..., description="Wireframe description after generate"
     )
 
 
 class DiagramResponse(BaseModel):
-    """Response schema for getting/updating diagram """
+    """Response schema for updating diagram """
     diagram_id: str = Field(
         ..., description="Unique identifier for the generated document"
     )
     title: str = Field(..., description="Diagram title")
     diagram_type: str = Field(..., description="Type of diagram")
     update_at: str = Field(..., description="Timestamp when document was generated")
-    mermaid_code: str = Field(..., description="Diagram content")
+    content_md: str = Field(..., description="Diagram content")
     description: str = Field(..., description="Wireframe description after generate")
 
 
 class DiagramListResponse(BaseModel):
     diagrams: List[DiagramResponse] = Field(..., description="List of user's project's diagram")
+
+
+class DiagramUpdateResponse(BaseModel):
+    """Response schema for updating diagram"""
+    diagram_id: str = Field(
+        ..., description="Unique identifier for the generated document"
+    )
+    title: str = Field(..., description="Diagram title")
+    diagram_type: str = Field(..., description="Type of diagram")
+    update_at: str = Field(..., description="Timestamp when document was generated")
+    content_md: str = Field(..., description="Diagram content")

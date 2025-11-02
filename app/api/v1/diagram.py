@@ -23,7 +23,8 @@ from app.core.config import settings
 from app.schemas.diagram import (
     DiagramGenerateResponse,
     DiagramResponse,
-    DiagramListResponse
+    DiagramListResponse,
+    DiagramUpdateResponse
 )
 from app.utils.mock_data.diagram_mock_data import get_mock_data
 
@@ -106,7 +107,7 @@ async def generate_usecase_diagram(
         diagram_type=diagram_type,
         title=title,
         description=ai_data["response"]["description"],
-        mermaid_code=ai_data["response"]["diagram_content"],
+        content_md=ai_data["response"]["diagram_content"],
     )
     db.add(new_diagram)
     db.commit()
@@ -121,22 +122,21 @@ async def generate_usecase_diagram(
         user_id=str(current_user.id),
         generated_at=str(generate_at),
         input_description=combined_input,
-        mermaid_code=new_diagram.mermaid_code,
+        content_md=new_diagram.content_md,
         description=new_diagram.description
     )
 
 
-@router.put("usecase/update/{project_id}/{diagram_id}", response_model=DiagramResponse)
+@router.put("/update/{project_id}/{diagram_id}", response_model=DiagramUpdateResponse)
 async def update_usecase_diagram(
     project_id: str,
     diagram_id: str,
-    diagram_type: str = Form(...),
-    mermaid_code: str = Form(...),
+    content_md: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     logger.info(
-        f"User {current_user.email} requested update for {diagram_type} diagram"
+        f"User {current_user.email} requested update for diagram {diagram_id}"
     )
     diagram = (
         db.query(Diagram)
@@ -154,18 +154,17 @@ async def update_usecase_diagram(
             detail="Diagram not found or you do not have permission to update it.",
         )
 
-    diagram.mermaid_code = mermaid_code
+    diagram.content_md = content_md
 
     db.commit()
     db.refresh(diagram)
 
-    return DiagramResponse(
+    return DiagramUpdateResponse(
         diagram_id=str(diagram.diagram_id),
         title=diagram.title,
         diagram_type=diagram.diagram_type,
         update_at=str(diagram.updated_at),
-        mermaid_code=diagram.mermaid_code,
-        description=diagram.description,
+        content_md=diagram.content_md,
     )
 
 
@@ -208,7 +207,7 @@ async def get_diagram(
             title=diagram.title,
             diagram_type=diagram.diagram_type,
             update_at=str(diagram.updated_at),
-            mermaid_code=diagram.mermaid_code,
+            content_md=diagram.content_md,
             description=diagram.description,
         )
 
@@ -264,7 +263,7 @@ async def list_diagram(
                     title=diagram.title,
                     diagram_type=diagram.diagram_type,
                     update_at=str(diagram.updated_at),
-                    mermaid_code=diagram.mermaid_code,
+                    content_md=diagram.content_md,
                     description=diagram.description,
                 )
             )
