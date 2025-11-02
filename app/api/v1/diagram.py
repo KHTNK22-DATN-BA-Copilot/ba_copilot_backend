@@ -17,9 +17,14 @@ from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.diagram import Diagram
 from app.models.user import User
+from app.models.project import Project
 from app.models.project_file import ProjectFile
 from app.core.config import settings
-from app.schemas.diagram import DiagramGenerateResponse, DiagramResponse
+from app.schemas.diagram import (
+    DiagramGenerateResponse,
+    DiagramResponse,
+    DiagramListResponse
+)
 from app.utils.mock_data.diagram_mock_data import get_mock_data
 
 from app.utils.srs_utils import (
@@ -31,7 +36,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/generate", response_model=DiagramGenerateResponse)
+@router.post("/usecase/generate", response_model=DiagramGenerateResponse)
 async def generate_usecase_diagram(
     project_id: int = Form(...),
     diagram_type: str = Form(...),
@@ -47,7 +52,7 @@ async def generate_usecase_diagram(
     )
 
     file_urls: List[str] = []
-    
+
     for file in files:
         url = await upload_to_supabase(file)
         if not url:
@@ -61,8 +66,6 @@ async def generate_usecase_diagram(
         )
         db.add(new_file)
         file_urls.append(url)
-
-        
 
     db.commit()
     for file in (
@@ -122,4 +125,54 @@ async def generate_usecase_diagram(
         description=new_diagram.description
     )
 
+@router.get("/get/{project_id}/{diagram_id}", response_model=DiagramResponse)
+async def get_diagram(
+    project_id: str,
+    diagram_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        project = (
+            db.query(Project)
+            .filter(Project.id == project_id, Project.user_id == current_user.id)
+            .first()
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have access to this project",
+            )
 
+        diagram = (
+            db.query(Diagram)
+            .filter(
+                Diagram.project_id == project_id,
+                Diagram.diagram_id == diagram_id,
+                Diagram.user_id == current_user.id,
+            )
+            .first()
+        )
+        if not diagram:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Diagram with id {diagram_id} not found",
+            )
+
+        return DiagramResponse(
+            diagram_id=str(diagram.diagram_id),
+            title=diagram.title,
+            diagram_type=diagram.diagram_type,
+            update_at=str(diagram.updated_at),
+            mermaid_code=diagram.mermaid_code,
+            description=diagram.description,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error fetching diagram detail")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}",
+        )

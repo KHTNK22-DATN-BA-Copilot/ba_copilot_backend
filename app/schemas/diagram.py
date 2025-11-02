@@ -1,5 +1,5 @@
 from pydantic import BaseModel,Field
-from typing import Optional
+from typing import Optional,List
 
 class DiagramGenerateResponse(BaseModel):
     """Response schema for diagram generation."""
@@ -32,3 +32,7 @@ class DiagramResponse(BaseModel):
     update_at: str = Field(..., description="Timestamp when document was generated")
     mermaid_code: str = Field(..., description="Diagram content")
     description: str = Field(..., description="Wireframe description after generate")
+
+
+class DiagramListResponse(BaseModel):
+    diagrams: List[DiagramResponse] = Field(..., description="List of user's project's diagram")
