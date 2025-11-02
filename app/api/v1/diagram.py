@@ -36,8 +36,8 @@ from app.utils.call_ai_service import call_ai_service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
-@router.post("/usecase/generate", response_model=DiagramGenerateResponse)
+# generate usecase-diagram
+@router.post("/generate", response_model=DiagramGenerateResponse)
 async def generate_usecase_diagram(
     project_id: int = Form(...),
     diagram_type: str = Form(...),
@@ -50,6 +50,14 @@ async def generate_usecase_diagram(
     logger.info(
         f"User {current_user.email} requested generation for {diagram_type} diagram"
     )
+
+    valid_diagram_types = ["sequence", "architecture", "usecase", "flowchart", "class", "activity"]
+    if diagram_type not in valid_diagram_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid diagram_type '{diagram_type}'. Must be one of {valid_diagram_types}.",
+        )
+
 
     file_urls: List[str] = []
 
@@ -85,12 +93,17 @@ async def generate_usecase_diagram(
         "user_message": combined_input,
     }
 
+    if diagram_type == "usecase":
+        ai_service_url = settings.ai_service_url_diagram_usecase
+    elif diagram_type == "class":
+        ai_service_url = settings.ai_service_url_diagram_class
+    elif diagram_type == "activity":
+        ai_service_url = settings.ai_service_url_diagram_activity
+
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
     try:
-        ai_data = await call_ai_service(
-            settings.ai_service_url_diagram_usecase, ai_payload, files
-        )
+        ai_data = await call_ai_service(ai_service_url, ai_payload, files)
         ai_response = ai_data.get("response") if ai_data else None
 
         if not ai_response or "diagram_content" not in ai_response:
@@ -128,6 +141,8 @@ async def generate_usecase_diagram(
         description=new_diagram.description,
     )
 
+
+# generate class-diagram
 
 @router.put("/update/{project_id}/{diagram_id}", response_model=DiagramUpdateResponse)
 async def update_usecase_diagram(
