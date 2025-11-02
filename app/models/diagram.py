@@ -15,7 +15,7 @@ class Diagram(Base):
     diagram_type = Column(String(32), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    mermaid_code = Column(Text, nullable=True, comment="Mermaid or DSL code")
+    content_md = Column(Text, nullable=True, comment="Mermaid or DSL code")
     image_url = Column(String(1024), nullable=True)
     options = Column(JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
