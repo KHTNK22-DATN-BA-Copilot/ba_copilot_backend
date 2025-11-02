@@ -125,6 +125,50 @@ async def generate_usecase_diagram(
         description=new_diagram.description
     )
 
+
+@router.put("usecase/update/{project_id}/{diagram_id}", response_model=DiagramResponse)
+async def update_usecase_diagram(
+    project_id: str,
+    diagram_id: str,
+    diagram_type: str = Form(...),
+    mermaid_code: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    logger.info(
+        f"User {current_user.email} requested update for {diagram_type} diagram"
+    )
+    diagram = (
+        db.query(Diagram)
+        .filter(
+            Diagram.project_id == project_id,
+            Diagram.diagram_id == diagram_id,
+            Diagram.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not diagram:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diagram not found or you do not have permission to update it.",
+        )
+
+    diagram.mermaid_code = mermaid_code
+
+    db.commit()
+    db.refresh(diagram)
+
+    return DiagramResponse(
+        diagram_id=str(diagram.diagram_id),
+        title=diagram.title,
+        diagram_type=diagram.diagram_type,
+        update_at=str(diagram.updated_at),
+        mermaid_code=diagram.mermaid_code,
+        description=diagram.description,
+    )
+
+
 @router.get("/get/{project_id}/{diagram_id}", response_model=DiagramResponse)
 async def get_diagram(
     project_id: str,
