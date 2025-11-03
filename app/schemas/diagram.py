@@ -17,9 +17,6 @@ class DiagramGenerateResponse(BaseModel):
         ..., description="Original input used for generation"
     )
     content_md:str=Field(..., description="Diagram content")
-    description: str = Field(
-        ..., description="Wireframe description after generate"
-    )
 
 
 class DiagramResponse(BaseModel):
