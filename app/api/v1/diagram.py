@@ -90,7 +90,7 @@ async def generate_usecase_diagram(
     """
 
     ai_payload = {
-        "user_message": combined_input,
+        "message": combined_input,
     }
 
     if diagram_type == "usecase":
@@ -106,7 +106,7 @@ async def generate_usecase_diagram(
         ai_data = await call_ai_service(ai_service_url, ai_payload, files)
         ai_response = ai_data.get("response") if ai_data else None
 
-        if not ai_response or "diagram_content" not in ai_response:
+        if not ai_response or "detail" not in ai_response:
             raise ValueError("Invalid AI response format")
 
     except Exception as e:
@@ -119,8 +119,7 @@ async def generate_usecase_diagram(
         user_id=current_user.id,
         diagram_type=diagram_type,
         title=title,
-        description=ai_data["response"]["description"],
-        content_md=ai_data["response"]["diagram_content"],
+        content_md=ai_data["response"]["detail"],
     )
     db.add(new_diagram)
     db.commit()
@@ -138,7 +137,6 @@ async def generate_usecase_diagram(
         generated_at=str(generate_at),
         input_description=combined_input,
         content_md=new_diagram.content_md,
-        description=new_diagram.description,
     )
 
 

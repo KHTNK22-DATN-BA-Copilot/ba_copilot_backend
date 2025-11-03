@@ -17,25 +17,24 @@ async def call_ai_service(
     """
     Gọi AI service với retry & timeout logic, hỗ trợ gửi file thật (multipart/form-data).
     """
-    files = files or []
 
     for attempt in range(1, retries + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                if files:
+                # if files and len(files) > 0:
 
-                    file_data = [
-                        ("files", (file.filename, await file.read(), file.content_type))
-                        for file in files
-                    ]
+                #     file_data = [
+                #         ("files", (file.filename, await file.read(), file.content_type))
+                #         for file in files
+                #     ]
 
-                    response = await client.post(
-                        ai_service_url,
-                        data=payload,
-                        files=file_data,
-                    )
-                else:
-                    response = await client.post(ai_service_url, json=payload)
+                #     response = await client.post(
+                #         ai_service_url,
+                #         data=payload,
+                #         files=file_data,
+                #     )
+                # else:
+                response = await client.post(ai_service_url, json=payload)
 
             if response.status_code == 200:
                 return response.json()

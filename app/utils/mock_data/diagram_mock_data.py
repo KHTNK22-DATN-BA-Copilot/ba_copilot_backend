@@ -22,7 +22,7 @@ def get_mock_data(diagram_type: str):
                 "actors (User, Event Organizer, Admin) and the system's main use cases "
                 "such as account management, event browsing, and ticket purchasing."
             ),
-            "diagram_content": """```mermaid
+            "detail": """```mermaid
             %% Use Case Diagram - Event Ticketing System
             ---
             title: Use Case Diagram - Event Ticketing System
@@ -87,7 +87,7 @@ def get_mock_data(diagram_type: str):
                 "It includes classes for users, events, tickets, and payments, "
                 "with their key attributes and relationships."
             ),
-            "diagram_content": """```mermaid
+            "detail": """```mermaid
             %% Class Diagram - Event Ticketing System
             ---
             title: Class Diagram - Event Ticketing System
@@ -149,7 +149,7 @@ def get_mock_data(diagram_type: str):
                 "in the Event Ticketing System. It includes key actions, decision nodes, and "
                 "synchronization points to represent system logic."
             ),
-            "diagram_content": """```mermaid
+            "detail": """```mermaid
             %% Activity Diagram - Ticket Purchase Flow
             ---
             title: Activity Diagram - Ticket Purchase Flow
@@ -186,5 +186,5 @@ def get_mock_data(diagram_type: str):
     # -------------------------------
     return {
         "description": "Mock diagram data unavailable for this diagram type.",
-        "diagram_content": "```mermaid\ngraph TD; A-->B;\n```",
+        "detail": "```mermaid\ngraph TD; A-->B;\n```",
     }

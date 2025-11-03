@@ -72,7 +72,7 @@ async def generate_srs(
     
 
     ai_payload = {
-        "user_message": description,
+        "message": description,
     }
 
     # Gọi AI service
