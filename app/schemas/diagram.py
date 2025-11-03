@@ -28,7 +28,6 @@ class DiagramResponse(BaseModel):
     diagram_type: str = Field(..., description="Type of diagram")
     update_at: str = Field(..., description="Timestamp when document was generated")
     content_md: str = Field(..., description="Diagram content")
-    description: str = Field(..., description="Wireframe description after generate")
 
 
 class DiagramListResponse(BaseModel):

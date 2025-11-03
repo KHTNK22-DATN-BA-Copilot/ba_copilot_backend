@@ -223,7 +223,6 @@ async def get_diagram(
             diagram_type=diagram.diagram_type,
             update_at=str(diagram.updated_at),
             content_md=diagram.content_md,
-            description=diagram.description,
         )
 
     except HTTPException:
@@ -277,7 +276,6 @@ async def list_diagram(
                     diagram_type=diagram.diagram_type,
                     update_at=str(diagram.updated_at),
                     content_md=diagram.content_md,
-                    description=diagram.description,
                 )
             )
 
