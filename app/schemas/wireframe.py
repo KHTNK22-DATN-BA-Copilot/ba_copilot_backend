@@ -16,5 +16,7 @@ class WireframeGenerateResponse(BaseModel):
     input_description: str = Field(
         ..., description="Original input used for generation"
     )
-    figma_link: str = Field(..., description="Link Wireframe in Figma")
-    wireframe_description:str=Field(...,description="Wireframe description after generate")
+    # figma_link: str = Field(..., description="Link Wireframe in Figma")
+    # wireframe_description:str=Field(...,description="Wireframe description after generate")
+    html_content: str = Field(..., description="Wireframe HTML content")
+    css_content: str = Field(..., description="Wireframe CSS content")
