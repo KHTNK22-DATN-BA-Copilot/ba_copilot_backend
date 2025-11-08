@@ -152,6 +152,9 @@ async def generate_wireframe(
         ai_data = await call_ai_service(
             settings.ai_service_url_wireframe, ai_payload, files
         )
+    except HTTPException as http_exc:
+        # Re-raise if it’s already an HTTPException from the AI service
+        raise http_exc
     except Exception as e:
         logger.error(f"Error calling AI service: {e}")
         raise HTTPException(
