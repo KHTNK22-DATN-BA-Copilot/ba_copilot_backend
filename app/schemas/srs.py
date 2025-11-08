@@ -39,6 +39,14 @@ class GetSRSResponse(BaseModel):
     updated_at: datetime
 
 
+class UpdateSRSResponse(BaseModel):
+    document_id: str
+    project_name: str
+    content: str
+    status: str
+    updated_at: datetime
+
+
 class SRSListResponse(BaseModel):
     SRSs: List[GetSRSResponse] = Field(..., description="List of srs document")
 

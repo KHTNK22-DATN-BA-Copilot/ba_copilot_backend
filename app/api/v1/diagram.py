@@ -140,7 +140,7 @@ async def generate_usecase_diagram(
     )
 
 
-# generate class-diagram
+
 
 @router.put("/update/{project_id}/{diagram_id}", response_model=DiagramUpdateResponse)
 async def update_usecase_diagram(
@@ -165,7 +165,7 @@ async def update_usecase_diagram(
 
     if not diagram:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Diagram not found or you do not have permission to update it.",
         )
 
@@ -289,3 +289,5 @@ async def list_diagram(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
         )
+
+
