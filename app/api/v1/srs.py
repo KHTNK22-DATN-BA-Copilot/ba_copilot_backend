@@ -387,7 +387,6 @@ async def regenerate_srs(
 async def list_SRS_Session(
     document_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     document = db.query(SRS).filter(SRS.document_id == document_id).first()
     if not document:
