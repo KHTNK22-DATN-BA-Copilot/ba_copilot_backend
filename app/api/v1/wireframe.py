@@ -95,13 +95,8 @@ Generate wireframe with HTML and CSS
 async def generate_wireframe(
     project_id: int = Form(...),
     device_type: str = Form(...),
-    page_type: str = Form(...),
-    fidelity: str = Form(...),
     wireframe_name: str = Form(...),
     description: str = Form(...),
-    require_components: str = Form(...),
-    color_schema: str = Form(...),
-    style: str = Form(...),
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -134,12 +129,11 @@ async def generate_wireframe(
 
     combined_input = f"""
         Project Description:
-        This project involves creating a {fidelity} {page_type} wireframe for a {device_type} device.
-        The wireframe is named "{wireframe_name}" and follows the "{style}" design style with a {color_schema} color scheme.
+        This project involves creating a wireframe for a {device_type} device.
+        The wireframe is named "{wireframe_name}".
 
         Key Requirements:
         - General Description: {description}
-        - Required Components: {require_components}
     """
 
     ai_payload = {
@@ -171,7 +165,6 @@ async def generate_wireframe(
         description=combined_input,
         html_content=html_content,
         css_content=css_content,
-        template_type=page_type,
         wireframe_metadata={
             "files": file_urls,
             "ai_response": ai_data,
