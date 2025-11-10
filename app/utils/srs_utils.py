@@ -1,8 +1,6 @@
-import asyncio
+
 import logging
 import uuid
-import httpx
-import json
 from fastapi import HTTPException, status, UploadFile
 from app.utils.supabase_client import supabase
 from PyPDF2 import PdfReader
@@ -14,7 +12,6 @@ import re
 
 logger = logging.getLogger(__name__)
 
-AI_SERVICE_URL = "http://ai:8000/api/v1/srs/generate"
 SUPABASE_BUCKET = "uploads"
 
 
@@ -63,27 +60,6 @@ async def extract_text_from_file(file: UploadFile) -> str:
     return content
 
 
-async def call_ai_service(payload: dict, retries: int = 3, timeout: int = 120):
-    """Gọi AI service với retry & timeout logic."""
-    for attempt in range(1, retries + 1):
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(AI_SERVICE_URL, json=payload)
-
-            if response.status_code == 200:
-                return response.json()
-
-            logger.warning(
-                f"AI service returned {response.status_code} (attempt {attempt}/{retries})"
-            )
-        except (httpx.ConnectError, httpx.ReadTimeout) as e:
-            logger.warning(f"AI request failed (attempt {attempt}/{retries}): {e}")
-            await asyncio.sleep(2 * attempt)
-
-    raise HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail="AI service unavailable after multiple retries",
-    )
 
 
 def format_srs_to_markdown(document: dict) -> str:

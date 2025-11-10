@@ -34,5 +34,10 @@ class Settings(BaseSettings):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
 
+    ai_service_url_srs: str
+    ai_service_url_wireframe:str
+    ai_service_url_diagram_usecase:str
+    ai_service_url_diagram_class: str
+    ai_service_url_diagram_activity: str
 
 settings = Settings()

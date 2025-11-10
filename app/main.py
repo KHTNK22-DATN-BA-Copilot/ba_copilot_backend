@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth, user, srs, project_router, ocr
-from app.models import project,project_file,conversation,diagram,message,wireframe
+from app.api.v1 import auth, user,srs,wireframe, project_router,diagram
+from app.models import project,project_file,conversation,message
 from app.core.database import engine, Base
 import logging
 import time
@@ -17,6 +17,10 @@ app = FastAPI(title="BaCopilot Authentication API", version="1.0.0")
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 app.include_router(srs.router, prefix="/api/v1/srs", tags=["srs_generator"])
+app.include_router(wireframe.router, prefix="/api/v1/wireframe", tags=["wireframe_generator"])
+app.include_router(
+    diagram.router, prefix="/api/v1/diagram", tags=["diagram_generator"]
+)
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
 app.include_router(ocr.router, prefix="/api/v1/ocr", tags=["ocr"])
 
@@ -24,7 +28,7 @@ app.include_router(ocr.router, prefix="/api/v1/ocr", tags=["ocr"])
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ba-copilot-frontend.vercel.app"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
