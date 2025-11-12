@@ -22,14 +22,12 @@ from app.api.v1.auth import get_current_user
 from app.models.srs import SRS
 from app.models.user import User
 from app.models.srs_attachment import Document_Attachments
-from app.models.srs_session import SRSSession
+from app.models.session import Session
 from app.schemas.srs import (
     SRSGenerateResponse,
     GetSRSResponse,
     SRSListResponse,
     UpdateSRSResponse,
-    ListSRSSessionResponse,
-    GetSRSSessionResponse,
 )
 from app.core.config import settings
 from app.utils.srs_utils import (
@@ -102,18 +100,22 @@ async def generate_srs(
 
     logger.info(f"SRS generated and saved for project '{project_name}'")
 
-    new_ai_session = SRSSession(
+    new_ai_session = Session(
         session_id=new_doc.version,
-        document_id=new_doc.document_id,
+        content_id=new_doc.document_id,
+        project_id=project_id,
         user_id=current_user.id,
+        content_type="srs",
         role="ai",
         message=json.dumps(ai_data["response"]),
     )
 
-    new_user_session = SRSSession(
+    new_user_session = Session(
         session_id=new_doc.version,
-        document_id=new_doc.document_id,
+        content_id=new_doc.document_id,
+        project_id=project_id,
         user_id=current_user.id,
+        content_type="srs",
         role="user",
         message=description,
     )
@@ -322,7 +324,7 @@ async def regenerate_srs(
 
     ai_files = files + existing_files_uploadfile
 
-    ai_payload = {"message": description, "document_id": document_id}
+    ai_payload = {"message": description, "content_id": document_id}
     ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload, ai_files)
     markdown_content = format_srs_to_markdown(ai_data["response"])
 
@@ -349,21 +351,27 @@ async def regenerate_srs(
                 file_urls.append(url)
 
         generate_at = datetime.now(timezone.utc)
-        new_ai_session = SRSSession(
+
+        new_ai_session = Session(
             session_id=existing_doc.version,
-            document_id=existing_doc.document_id,
+            content_id=existing_doc.document_id,
+            project_id=project_id,
             user_id=current_user.id,
+            content_type="srs",
             role="ai",
             message=json.dumps(ai_data["response"]),
         )
 
-        new_user_session = SRSSession(
+        new_user_session = Session(
             session_id=existing_doc.version,
-            document_id=existing_doc.document_id,
+            content_id=existing_doc.document_id,
+            project_id=project_id,
             user_id=current_user.id,
+            content_type="srs",
             role="user",
             message=description,
         )
+
         db.add_all([new_ai_session, new_user_session])
         db.commit()
         db.refresh(existing_doc)
@@ -382,32 +390,3 @@ async def regenerate_srs(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get("/history/{document_id}", response_model=ListSRSSessionResponse)
-async def list_SRS_Session(
-    document_id: str,
-    db: Session = Depends(get_db),
-):
-    document = db.query(SRS).filter(SRS.document_id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    srs_session_list = (
-        db.query(SRSSession)
-        .filter(SRSSession.document_id == document_id)
-        .order_by(SRSSession.created_at.asc())
-        .all()
-    )
-
-    result = []
-    for srs_session in srs_session_list:
-
-        result.append(
-            GetSRSSessionResponse(
-                role=srs_session.role,
-                message=srs_session.message,
-                create_at=srs_session.created_at,
-            )
-        )
-
-    return {"SRSSessions": result}

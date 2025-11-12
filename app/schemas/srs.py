@@ -69,13 +69,3 @@ class SRSExportResponse(BaseModel):
     format: str
 
 
-class GetSRSSessionResponse(BaseModel):
-    role: str
-    message: str
-    create_at: datetime
-
-
-class ListSRSSessionResponse(BaseModel):
-    SRSSessions: List[GetSRSSessionResponse] = Field(
-        ..., description="List of srs session"
-    )
