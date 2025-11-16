@@ -24,7 +24,8 @@ from app.models.user import User
 from app.models.project_file import ProjectFile
 from app.utils.supabase_client import supabase
 from app.core.config import settings
-from app.schemas.wireframe import WireframeGenerateResponse
+from app.schemas.wireframe import WireframeGenerateResponse, WireframeListResponse
+from app.schemas.wireframe import GetWireframeResponse
 from app.utils.srs_utils import (
     upload_to_supabase,
 )
@@ -95,13 +96,8 @@ Generate wireframe with HTML and CSS
 async def generate_wireframe(
     project_id: int = Form(...),
     device_type: str = Form(...),
-    page_type: str = Form(...),
-    fidelity: str = Form(...),
     wireframe_name: str = Form(...),
     description: str = Form(...),
-    require_components: str = Form(...),
-    color_schema: str = Form(...),
-    style: str = Form(...),
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -134,12 +130,11 @@ async def generate_wireframe(
 
     combined_input = f"""
         Project Description:
-        This project involves creating a {fidelity} {page_type} wireframe for a {device_type} device.
-        The wireframe is named "{wireframe_name}" and follows the "{style}" design style with a {color_schema} color scheme.
+        This project involves creating a wireframe for a {device_type} device.
+        The wireframe is named "{wireframe_name}".
 
         Key Requirements:
         - General Description: {description}
-        - Required Components: {require_components}
     """
 
     ai_payload = {
@@ -171,7 +166,6 @@ async def generate_wireframe(
         description=combined_input,
         html_content=html_content,
         css_content=css_content,
-        template_type=page_type,
         wireframe_metadata={
             "files": file_urls,
             "ai_response": ai_data,
@@ -192,4 +186,59 @@ async def generate_wireframe(
         input_description=combined_input,
         html_content=new_doc.html_content,
         css_content=new_doc.css_content,
+    )
+
+
+@router.get("/list/{project_id}", response_model=WireframeListResponse)
+async def list_wireframes(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    wireframes = db.query(Wireframe).filter(Wireframe.project_id == project_id).all()
+    result = []
+    for wireframe in wireframes:
+        result.append(
+            GetWireframeResponse(
+                wireframe_id=str(wireframe.wireframe_id),
+                project_id=wireframe.project_id,
+                user_id=wireframe.user_id,
+                title=wireframe.title,
+                description=wireframe.description,
+                html_content=wireframe.html_content,
+                css_content=wireframe.css_content,
+                created_at=wireframe.created_at,
+                updated_at=wireframe.updated_at,
+            )
+        )
+    return {"wireframes": result}
+
+@router.get("/get/{wireframe_id}", response_model=GetWireframeResponse)
+async def get_wireframe(
+    wireframe_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    wireframe = (
+        db.query(Wireframe)
+        .filter(
+            Wireframe.wireframe_id == wireframe_id, Wireframe.user_id == current_user.id
+        )
+        .first()
+    )
+    if not wireframe:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Wireframe not found",
+        )
+    return GetWireframeResponse(
+        wireframe_id=str(wireframe.wireframe_id),
+        project_id=wireframe.project_id,
+        user_id=wireframe.user_id,
+        title=wireframe.title,
+        description=wireframe.description,
+        html_content=wireframe.html_content,
+        css_content=wireframe.css_content,
+        created_at=wireframe.created_at,
+        updated_at=wireframe.updated_at,
     )

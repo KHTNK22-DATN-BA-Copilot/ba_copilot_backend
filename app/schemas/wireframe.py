@@ -20,3 +20,21 @@ class WireframeGenerateResponse(BaseModel):
     # wireframe_description:str=Field(...,description="Wireframe description after generate")
     html_content: str = Field(..., description="Wireframe HTML content")
     css_content: str = Field(..., description="Wireframe CSS content")
+
+
+class GetWireframeResponse(BaseModel):
+    wireframe_id: str
+    project_id: int
+    user_id: int
+    title: str
+    description: str
+    html_content: str
+    css_content: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WireframeListResponse(BaseModel):
+    wireframes: List[GetWireframeResponse] = Field(
+        ..., description="List of wireframes"
+    )
