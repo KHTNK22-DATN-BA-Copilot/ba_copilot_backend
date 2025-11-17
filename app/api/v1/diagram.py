@@ -28,8 +28,9 @@ from app.schemas.diagram import (
 )
 from app.utils.mock_data.diagram_mock_data import get_mock_data
 
-from app.utils.srs_utils import (
+from app.utils.file_handling import (
     upload_to_supabase,
+    has_extension
 )
 from app.utils.call_ai_service import call_ai_service
 
@@ -58,10 +59,11 @@ async def generate_usecase_diagram(
             detail=f"Invalid diagram_type '{diagram_type}'. Must be one of {valid_diagram_types}.",
         )
 
-
     file_urls: List[str] = []
 
     for file in files:
+        if not file.filename or not has_extension(file.filename):
+            continue
         url = await upload_to_supabase(file)
         if not url:
             raise HTTPException(
@@ -138,8 +140,6 @@ async def generate_usecase_diagram(
         input_description=combined_input,
         content_md=new_diagram.content_md,
     )
-
-
 
 
 @router.put("/update/{project_id}/{diagram_id}", response_model=DiagramUpdateResponse)
@@ -289,5 +289,3 @@ async def list_diagram(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
         )
-
-
