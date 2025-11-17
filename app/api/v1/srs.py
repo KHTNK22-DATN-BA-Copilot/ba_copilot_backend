@@ -30,10 +30,13 @@ from app.schemas.srs import (
     UpdateSRSResponse,
 )
 from app.core.config import settings
-from app.utils.srs_utils import (
+from app.utils.file_handling import (
     upload_to_supabase,
-    format_srs_to_markdown,
     get_file_from_supabase,
+    has_extension
+)
+from app.utils.srs_utils import (
+    format_srs_to_markdown,
 )
 from app.utils.call_ai_service import call_ai_service
 
@@ -85,6 +88,8 @@ async def generate_srs(
         file_urls = []
         if files:
             for file in files:
+                if not file.filename or not has_extension(file.filename):
+                    continue
                 url = await upload_to_supabase(file)
                 if not url:
                     raise Exception(f"Failed to upload file {file.filename}")
@@ -341,6 +346,8 @@ async def regenerate_srs(
         file_urls = []
         if files:
             for file in files:
+                if not file.filename or not has_extension(file.filename):
+                    continue
                 url = await upload_to_supabase(file)
                 if not url:
                     raise Exception(f"Failed to upload file {file.filename}")
@@ -389,4 +396,3 @@ async def regenerate_srs(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-

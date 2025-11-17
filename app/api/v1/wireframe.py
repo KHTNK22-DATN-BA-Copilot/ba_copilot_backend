@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from io import BytesIO
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
@@ -26,9 +26,7 @@ from app.utils.supabase_client import supabase
 from app.core.config import settings
 from app.schemas.wireframe import WireframeGenerateResponse, WireframeListResponse
 from app.schemas.wireframe import GetWireframeResponse
-from app.utils.srs_utils import (
-    upload_to_supabase,
-)
+from app.utils.file_handling import (upload_to_supabase, has_extension)
 from app.utils.call_ai_service import call_ai_service
 
 logger = logging.getLogger(__name__)
@@ -94,11 +92,11 @@ Generate wireframe with HTML and CSS
 
 @router.post("/generate", response_model=WireframeGenerateResponse)
 async def generate_wireframe(
+    files: List[UploadFile],
     project_id: int = Form(...),
     device_type: str = Form(...),
     wireframe_name: str = Form(...),
     description: str = Form(...),
-    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -108,23 +106,25 @@ async def generate_wireframe(
 
     # Upload all files to Supabase
     file_urls: List[str] = []
+    if files:
+        for file in files:
+            if not file.filename or not has_extension(file.filename):
+             continue
+            url = await upload_to_supabase(file)
+            if not url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to upload file {file.filename}",
+                )
 
-    for file in files:
-        url = await upload_to_supabase(file)
-        if not url:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload file {file.filename}",
+            new_file = ProjectFile(
+                file_path=url,
+                project_id=project_id,
+                user_id=current_user.id,
+                belong_to="wireframe",
             )
-
-        new_file = ProjectFile(
-            file_path=url,
-            project_id=project_id,
-            user_id=current_user.id,
-            belong_to="wireframe",
-        )
-        db.add(new_file)
-        file_urls.append(url)
+            db.add(new_file)
+            file_urls.append(url)
 
     db.commit()
 
