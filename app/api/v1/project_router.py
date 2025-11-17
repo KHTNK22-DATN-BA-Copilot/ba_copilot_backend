@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import asc, desc
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetailResponse,
@@ -49,16 +50,40 @@ async def create_project(
 
 @router.get("/", response_model=ProjectListResponse)
 async def get_projects(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    name: str | None = Query(None),
+    created_at: str | None = Query(None),
+    updated_at: str | None = Query(None),
+    sort_field: str = Query("created_at", regex="^(name|created_at|updated_at)$"),
+    sort: str = Query("DESC", regex="^(ASC|DESC)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    projects = (
-        db.query(Project)
-        .filter(Project.user_id == current_user.id, Project.status != "deleted")
-        .all()
+
+    order_func = asc if sort.upper() == "ASC" else desc
+
+
+    query = db.query(Project).filter(
+        Project.user_id == current_user.id,
+        Project.status != "deleted",
     )
-    return {
-        "projects": projects,
+
+
+    if name:
+        query = query.filter(Project.name.ilike(f"%{name}%"))
+    if created_at:
+        query = query.filter(Project.created_at == created_at)
+    if updated_at:
+        query = query.filter(Project.updated_at == updated_at)
+
+    sort_map = {
+        "name": Project.name,
+        "created_at": Project.created_at,
+        "updated_at": Project.updated_at,
     }
+
+    query = query.order_by(order_func(sort_map[sort_field]))
+
+    return {"projects": query.all()}
 
 
 @router.get("/{project_id}", response_model=ProjectDetailResponse)
