@@ -84,26 +84,26 @@ async def generate_srs(
     db.commit()
     db.refresh(new_doc)
 
-    try:
-        file_urls = []
-        if files:
-            for file in files:
-                if not file.filename or not has_extension(file.filename):
-                    continue
-                url = await upload_to_supabase(file)
-                if not url:
-                    raise Exception(f"Failed to upload file {file.filename}")
-                new_file = Document_Attachments(
-                    file_path=url, document_id=new_doc.document_id
-                )
-                db.add(new_file)
-                file_urls.append(url)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    # try:
+    #     file_urls = []
+    #     if files:
+    #         for file in files:
+    #             if not file.filename or not has_extension(file.filename):
+    #                 continue
+    #             url = await upload_to_supabase(file)
+    #             if not url:
+    #                 raise Exception(f"Failed to upload file {file.filename}")
+    #             new_file = Document_Attachments(
+    #                 file_path=url, document_id=new_doc.document_id
+    #             )
+    #             db.add(new_file)
+    #             file_urls.append(url)
+    #     db.commit()
+    # except Exception as e:
+    #     db.rollback()
+    #     raise HTTPException(status_code=500, detail=str(e))
 
-    logger.info(f"SRS generated and saved for project '{project_name}'")
+    # logger.info(f"SRS generated and saved for project '{project_name}'")
 
     new_ai_session = Session(
         session_id=new_doc.version,
@@ -319,18 +319,18 @@ async def regenerate_srs(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    existing_files_db = (
-        db.query(Document_Attachments)
-        .filter(Document_Attachments.document_id == document_id)
-        .all()
-    )
+    # existing_files_db = (
+    #     db.query(Document_Attachments)
+    #     .filter(Document_Attachments.document_id == document_id)
+    #     .all()
+    # )
 
-    existing_files_uploadfile = await get_file_from_supabase(existing_files_db)
+    # existing_files_uploadfile = await get_file_from_supabase(existing_files_db)
 
-    ai_files = files + existing_files_uploadfile
+    # ai_files = files + existing_files_uploadfile
 
     ai_payload = {"message": description, "content_id": document_id}
-    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload, ai_files)
+    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload, files)
     markdown_content = format_srs_to_markdown(ai_data["response"])
 
     existing_doc.content_markdown = markdown_content
@@ -343,19 +343,19 @@ async def regenerate_srs(
     }
 
     try:
-        file_urls = []
-        if files:
-            for file in files:
-                if not file.filename or not has_extension(file.filename):
-                    continue
-                url = await upload_to_supabase(file)
-                if not url:
-                    raise Exception(f"Failed to upload file {file.filename}")
-                new_file = Document_Attachments(
-                    file_path=url, document_id=existing_doc.document_id
-                )
-                db.add(new_file)
-                file_urls.append(url)
+        # file_urls = []
+        # if files:
+        #     for file in files:
+        #         if not file.filename or not has_extension(file.filename):
+        #             continue
+        #         url = await upload_to_supabase(file)
+        #         if not url:
+        #             raise Exception(f"Failed to upload file {file.filename}")
+        #         new_file = Document_Attachments(
+        #             file_path=url, document_id=existing_doc.document_id
+        #         )
+        #         db.add(new_file)
+        #         file_urls.append(url)
 
         generate_at = datetime.now(timezone.utc)
 

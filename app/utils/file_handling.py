@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import List
 import uuid
 from fastapi import UploadFile
@@ -7,27 +8,42 @@ from PyPDF2 import PdfReader
 import docx2txt
 import io
 import tempfile
-
-
+import unicodedata
+import re
 
 logger = logging.getLogger(__name__)
 
 SUPABASE_BUCKET = "uploads"
 
 
+def sanitize_filename(filename: str) -> str:
+    name, ext = os.path.splitext(filename)
+
+    name = unicodedata.normalize("NFD", name).encode("ascii", "ignore").decode("utf-8")
+
+    name = re.sub(r"\s+", "_", name)
+
+    name = re.sub(r"[^a-zA-Z0-9._-]", "", name)
+
+    return f"{uuid.uuid4()}_{name}{ext}"
+
+
 async def upload_to_supabase(file: UploadFile) -> str | None:
     """Upload file lên Supabase và trả về public URL."""
     try:
-        file_name = f"{uuid.uuid4()}_{file.filename}"
+        file_name = f"{file.filename}"
+        new_file_name=sanitize_filename(file_name)
         file_data = await file.read()
 
-        res = supabase.storage.from_(SUPABASE_BUCKET).upload(file_name, file_data)
+        res = supabase.storage.from_(SUPABASE_BUCKET).upload(new_file_name, file_data)
 
         if not res.path:
             logger.error(f"Failed to upload {file.filename}")
             return None
 
-        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(file_name)
+        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(
+            new_file_name
+        )
         index = public_url.find(SUPABASE_BUCKET)
         path_in_bucket = public_url[index + len(SUPABASE_BUCKET) + 1 :]
 

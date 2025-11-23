@@ -21,7 +21,7 @@ from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.wireframe import Wireframe
 from app.models.user import User
-from app.models.project_file import ProjectFile
+from app.models.project_raw_file import ProjectRawFile
 from app.utils.supabase_client import supabase
 from app.core.config import settings
 from app.schemas.wireframe import WireframeGenerateResponse, WireframeListResponse
@@ -105,28 +105,28 @@ async def generate_wireframe(
     )
 
     # Upload all files to Supabase
-    file_urls: List[str] = []
-    if files:
-        for file in files:
-            if not file.filename or not has_extension(file.filename):
-             continue
-            url = await upload_to_supabase(file)
-            if not url:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to upload file {file.filename}",
-                )
+    # file_urls: List[str] = []
+    # if files:
+    #     for file in files:
+    #         if not file.filename or not has_extension(file.filename):
+    #          continue
+    #         url = await upload_to_supabase(file)
+    #         if not url:
+    #             raise HTTPException(
+    #                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #                 detail=f"Failed to upload file {file.filename}",
+    #             )
 
-            new_file = ProjectFile(
-                file_path=url,
-                project_id=project_id,
-                user_id=current_user.id,
-                belong_to="wireframe",
-            )
-            db.add(new_file)
-            file_urls.append(url)
+    #         new_file = ProjectFile(
+    #             file_path=url,
+    #             project_id=project_id,
+    #             user_id=current_user.id,
+    #             belong_to="wireframe",
+    #         )
+    #         db.add(new_file)
+    #         file_urls.append(url)
 
-    db.commit()
+    # db.commit()
 
     combined_input = f"""
         Project Description:
@@ -167,7 +167,7 @@ async def generate_wireframe(
         html_content=html_content,
         css_content=css_content,
         wireframe_metadata={
-            "files": file_urls,
+            # "files": file_urls,
             "ai_response": ai_data,
         },
     )

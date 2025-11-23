@@ -21,8 +21,4 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
-    tokens = relationship("Token", back_populates="user", cascade="all, delete-orphan")
-    projects = relationship(
-        "Project", back_populates="user", cascade="all, delete-orphan"
-    )
+   
