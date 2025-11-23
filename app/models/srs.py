@@ -22,6 +22,5 @@ class SRS(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
-    project = relationship("Project", back_populates="documents")
+   
    

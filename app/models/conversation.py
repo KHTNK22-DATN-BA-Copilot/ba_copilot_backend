@@ -19,8 +19,4 @@ class Conversation(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
-    project = relationship("Project", back_populates="conversations")
-    messages = relationship(
-        "Message", back_populates="conversation", cascade="all, delete-orphan"
-    )
+    

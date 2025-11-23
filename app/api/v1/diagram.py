@@ -18,7 +18,7 @@ from app.api.v1.auth import get_current_user
 from app.models.diagram import Diagram
 from app.models.user import User
 from app.models.project import Project
-from app.models.project_file import ProjectFile
+from app.models.project_raw_file import ProjectRawFile
 from app.core.config import settings
 from app.schemas.diagram import (
     DiagramGenerateResponse,
@@ -59,29 +59,29 @@ async def generate_usecase_diagram(
             detail=f"Invalid diagram_type '{diagram_type}'. Must be one of {valid_diagram_types}.",
         )
 
-    file_urls: List[str] = []
+    # file_urls: List[str] = []
 
-    for file in files:
-        if not file.filename or not has_extension(file.filename):
-            continue
-        url = await upload_to_supabase(file)
-        if not url:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload file {file.filename}",
-            )
+    # for file in files:
+    #     if not file.filename or not has_extension(file.filename):
+    #         continue
+    #     url = await upload_to_supabase(file)
+    #     if not url:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #             detail=f"Failed to upload file {file.filename}",
+    #         )
 
-        new_file = ProjectFile(
-            file_path=url, project_id=project_id, user_id=current_user.id
-        )
-        db.add(new_file)
-        file_urls.append(url)
+    #     new_file = ProjectFile(
+    #         file_path=url, project_id=project_id, user_id=current_user.id
+    #     )
+    #     db.add(new_file)
+    #     file_urls.append(url)
 
-    db.commit()
-    for file in (
-        db.query(ProjectFile).filter(ProjectFile.project_id == project_id).all()
-    ):
-        db.refresh(file)
+    # db.commit()
+    # for file in (
+    #     db.query(ProjectFile).filter(ProjectFile.project_id == project_id).all()
+    # ):
+    #     db.refresh(file)
 
     combined_input = f"""
         Project Description:
