@@ -17,10 +17,9 @@ class Wireframe(Base):
     html_content = Column(Text, nullable=False)
     css_content = Column(Text, nullable=True)
     template_type = Column(String(64), nullable=True)
+    version = Column(Integer, default=1, nullable=False)
     wireframe_metadata = Column(JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-
-   

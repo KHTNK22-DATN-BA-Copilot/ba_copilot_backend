@@ -9,24 +9,19 @@ from fastapi import (
     UploadFile,
     File,
     Form,
-    Query,
 )
-from fastapi.responses import StreamingResponse
-from io import BytesIO
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.wireframe import Wireframe
 from app.models.user import User
-from app.models.project_raw_file import ProjectRawFile
-from app.utils.supabase_client import supabase
+from app.models.session import Chat_Session
 from app.core.config import settings
 from app.schemas.wireframe import WireframeGenerateResponse, WireframeListResponse
 from app.schemas.wireframe import GetWireframeResponse
-from app.utils.file_handling import (upload_to_supabase, has_extension)
 from app.utils.call_ai_service import call_ai_service
 
 logger = logging.getLogger(__name__)
@@ -159,21 +154,54 @@ async def generate_wireframe(
 
     ai_content = ai_data.get("response", {}).get("content", "")
     html_content, css_content = extract_html_css_from_content(ai_content)
-    new_doc = Wireframe(
-        project_id=project_id,
-        user_id=current_user.id,
-        title=wireframe_name,
-        description=combined_input,
-        html_content=html_content,
-        css_content=css_content,
-        wireframe_metadata={
-            # "files": file_urls,
-            "ai_response": ai_data,
-        },
-    )
-    db.add(new_doc)
-    db.commit()
-    db.refresh(new_doc)
+    try:
+        new_doc = Wireframe(
+            project_id=project_id,
+            user_id=current_user.id,
+            title=wireframe_name,
+            description=combined_input,
+            html_content=html_content,
+            css_content=css_content,
+            wireframe_metadata={
+                # "files": file_urls,
+                "ai_response": ai_data,
+            },
+        )
+        db.add(new_doc)
+        db.flush()  # get generated diagram_id + version without commit
+
+        # Create chat sessions
+
+        new_user_session = Chat_Session(
+            session_id=new_doc.version,
+            content_id=new_doc.wireframe_id,
+            project_id=project_id,
+            user_id=current_user.id,
+            content_type="wireframe",
+            role="user",
+            message=combined_input,
+        )
+
+        new_ai_session = Chat_Session(
+            session_id=new_doc.version,
+            content_id=new_doc.wireframe_id,
+            project_id=project_id,
+            user_id=current_user.id,
+            content_type="wireframe",
+            role="ai",
+            message=json.dumps(ai_data["response"]),
+        )
+
+        db.add_all([new_ai_session, new_user_session])
+        db.commit()
+        db.refresh(new_doc)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Transaction failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save wireframe and session data.",
+        )
 
     logger.info(
         f"User {current_user.id} generated and saved for project '{wireframe_name}'"
@@ -242,3 +270,122 @@ async def get_wireframe(
         created_at=wireframe.created_at,
         updated_at=wireframe.updated_at,
     )
+
+
+@router.patch("/regenerate/{project_id}/{wireframe_id}", response_model=GetWireframeResponse)
+async def regenerate_srs(
+    project_id: int,
+    wireframe_id: str,
+    description: str = Form(...),
+    files: List[UploadFile] = File([]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    logger.info(
+        f"User {current_user.email} requested SRS regeneration for {wireframe_id}"
+    )
+
+    existing_wireframe = (
+        db.query(Wireframe)
+        .filter(
+            Wireframe.wireframe_id == wireframe_id, Wireframe.project_id == project_id
+        )
+        .first()
+    )
+    if not existing_wireframe:
+        raise HTTPException(status_code=404, detail="Wireframe not found")
+
+    if current_user.id != existing_wireframe.user_id:
+        raise HTTPException(
+            status_code=403, detail="You don't have permission to access this document."
+        )
+
+    # existing_files_db = (
+    #     db.query(Document_Attachments)
+    #     .filter(Document_Attachments.document_id == document_id)
+    #     .all()
+    # )
+
+    # existing_files_uploadfile = await get_file_from_supabase(existing_files_db)
+
+    # ai_files = files + existing_files_uploadfile
+
+    ai_payload = {"message": description, "content_id": wireframe_id}
+
+    try:
+        ai_data = await call_ai_service(
+            settings.ai_service_url_wireframe, ai_payload, files
+        )
+    except HTTPException as http_exc:
+        # Re-raise if it’s already an HTTPException from the AI service
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error calling AI service: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error calling AI service: {e}",
+        )
+
+    ai_content = ai_data.get("response", {}).get("content", "")
+    html_content, css_content = extract_html_css_from_content(ai_content)
+
+    existing_wireframe.html_content=html_content
+    existing_wireframe.css_content=css_content
+    existing_wireframe.version += 1
+
+    try:
+        # file_urls = []
+        # if files:
+        #     for file in files:
+        #         if not file.filename or not has_extension(file.filename):
+        #             continue
+        #         url = await upload_to_supabase(file)
+        #         if not url:
+        #             raise Exception(f"Failed to upload file {file.filename}")
+        #         new_file = Document_Attachments(
+        #             file_path=url, document_id=existing_doc.document_id
+        #         )
+        #         db.add(new_file)
+        #         file_urls.append(url)
+
+        generate_at = datetime.now(timezone.utc)
+
+        new_user_session = Chat_Session(
+            session_id=existing_wireframe.version,
+            content_id=existing_wireframe.wireframe_id,
+            project_id=project_id,
+            user_id=current_user.id,
+            content_type="diagram",
+            role="user",
+            message=description,
+        )
+
+        new_ai_session = Chat_Session(
+            session_id=existing_wireframe.version,
+            content_id=existing_wireframe.wireframe_id,
+            project_id=project_id,
+            user_id=current_user.id,
+            content_type="diagram",
+            role="ai",
+            message=json.dumps(ai_data["response"]),
+        )
+
+        db.add_all([new_ai_session, new_user_session])
+        db.commit()
+        db.refresh(existing_wireframe)
+
+        return GetWireframeResponse(
+            wireframe_id=str(existing_wireframe.wireframe_id),
+            project_id=existing_wireframe.project_id,
+            user_id=existing_wireframe.user_id,
+            title=existing_wireframe.title,
+            description=existing_wireframe.description,
+            html_content=existing_wireframe.html_content,
+            css_content=existing_wireframe.css_content,
+            created_at=existing_wireframe.created_at,
+            updated_at=existing_wireframe.updated_at,
+        )
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
