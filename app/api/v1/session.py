@@ -11,7 +11,7 @@ from typing import List
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.srs import SRS
-from app.models.session import Session
+from app.models.session import Chat_Session
 from app.schemas.session import (
     ListSessionResponse,
     GetSessionResponse,
@@ -31,9 +31,9 @@ async def list_Session(
         raise HTTPException(status_code=404, detail="Document not found")
 
     srs_session_list = (
-        db.query(Session)
-        .filter(Session.content_id == content_id)
-        .order_by(Session.created_at.asc())
+        db.query(Chat_Session)
+        .filter(Chat_Session.content_id == content_id)
+        .order_by(Chat_Session.created_at.asc())
         .all()
     )
 

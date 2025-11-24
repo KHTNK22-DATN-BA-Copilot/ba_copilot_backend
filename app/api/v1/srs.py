@@ -22,7 +22,7 @@ from app.api.v1.auth import get_current_user
 from app.models.srs import SRS
 from app.models.user import User
 from app.models.srs_attachment import Document_Attachments
-from app.models.session import Session
+from app.models.session import Chat_Session
 from app.schemas.srs import (
     SRSGenerateResponse,
     GetSRSResponse,
@@ -105,7 +105,7 @@ async def generate_srs(
 
     # logger.info(f"SRS generated and saved for project '{project_name}'")
 
-    new_ai_session = Session(
+    new_ai_session = Chat_Session(
         session_id=new_doc.version,
         content_id=new_doc.document_id,
         project_id=project_id,
@@ -115,7 +115,7 @@ async def generate_srs(
         message=json.dumps(ai_data["response"]),
     )
 
-    new_user_session = Session(
+    new_user_session = Chat_Session(
         session_id=new_doc.version,
         content_id=new_doc.document_id,
         project_id=project_id,
@@ -359,7 +359,7 @@ async def regenerate_srs(
 
         generate_at = datetime.now(timezone.utc)
 
-        new_ai_session = Session(
+        new_ai_session = Chat_Session(
             session_id=existing_doc.version,
             content_id=existing_doc.document_id,
             project_id=project_id,
@@ -369,7 +369,7 @@ async def regenerate_srs(
             message=json.dumps(ai_data["response"]),
         )
 
-        new_user_session = Session(
+        new_user_session = Chat_Session(
             session_id=existing_doc.version,
             content_id=existing_doc.document_id,
             project_id=project_id,

@@ -31,7 +31,7 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 
 
-class Session(Base):
+class Chat_Session(Base):
     __tablename__ = "sessions"
 
     session_id = Column(Integer)
