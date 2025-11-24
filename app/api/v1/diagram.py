@@ -135,7 +135,7 @@ async def generate_usecase_diagram(
             content_id=new_diagram.diagram_id,
             project_id=project_id,
             user_id=current_user.id,
-            content_type="srs",
+            content_type="diagram",
             role="ai",
             message=json.dumps(ai_data["response"]),
         )
@@ -145,7 +145,7 @@ async def generate_usecase_diagram(
             content_id=new_diagram.diagram_id,
             project_id=project_id,
             user_id=current_user.id,
-            content_type="srs",
+            content_type="diagram",
             role="user",
             message=description,
         )
@@ -346,7 +346,7 @@ async def regenerate_srs(
         .first()
     )
     if not existing_diagram:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="Diagram not found")
 
     if current_user.id != existing_diagram.user_id:
         raise HTTPException(
@@ -363,8 +363,15 @@ async def regenerate_srs(
 
     # ai_files = files + existing_files_uploadfile
 
+    if existing_diagram.diagram_type == "usecase":
+        ai_service_url = settings.ai_service_url_diagram_usecase
+    elif existing_diagram.diagram_type == "class":
+        ai_service_url = settings.ai_service_url_diagram_class
+    elif existing_diagram.diagram_type == "activity":
+        ai_service_url = settings.ai_service_url_diagram_activity
+
     ai_payload = {"message": description, "content_id": diagram_id}
-    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload, files)
+    ai_data = await call_ai_service(ai_service_url, ai_payload, files)
 
     existing_diagram.content_md = ai_data["response"]["detail"]
     existing_diagram.version += 1
