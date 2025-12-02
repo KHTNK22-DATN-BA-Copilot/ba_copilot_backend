@@ -1,3 +1,4 @@
+from io import BytesIO
 import json
 import logging
 from fastapi import (
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.diagram import Diagram
+from app.models.document import Documents
 from app.models.user import User
 from app.models.project import Project
 from app.models.session import Chat_Session
@@ -30,6 +31,7 @@ from app.schemas.diagram import (
 from app.utils.mock_data.diagram_mock_data import get_mock_data
 
 from app.utils.file_handling import (
+    update_file_from_supabase,
     upload_to_supabase,
     has_extension
 )
@@ -45,7 +47,6 @@ async def generate_usecase_diagram(
     diagram_type: str = Form(...),
     title: str = Form(...),
     description: str = Form(...),
-    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -59,30 +60,6 @@ async def generate_usecase_diagram(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid diagram_type '{diagram_type}'. Must be one of {valid_diagram_types}.",
         )
-
-    # file_urls: List[str] = []
-
-    # for file in files:
-    #     if not file.filename or not has_extension(file.filename):
-    #         continue
-    #     url = await upload_to_supabase(file)
-    #     if not url:
-    #         raise HTTPException(
-    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             detail=f"Failed to upload file {file.filename}",
-    #         )
-
-    #     new_file = ProjectFile(
-    #         file_path=url, project_id=project_id, user_id=current_user.id
-    #     )
-    #     db.add(new_file)
-    #     file_urls.append(url)
-
-    # db.commit()
-    # for file in (
-    #     db.query(ProjectFile).filter(ProjectFile.project_id == project_id).all()
-    # ):
-    #     db.refresh(file)
 
     combined_input = f"""
         Project Description:
@@ -106,7 +83,7 @@ async def generate_usecase_diagram(
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
     try:
-        ai_data = await call_ai_service(ai_service_url, ai_payload, files)
+        ai_data = await call_ai_service(ai_service_url, ai_payload)
         ai_response = ai_data.get("response") if ai_data else None
 
         if not ai_response or "detail" not in ai_response:
@@ -117,14 +94,27 @@ async def generate_usecase_diagram(
         ai_data = {"response": get_mock_data(diagram_type)}
         ai_response = ai_data["response"]
 
+    file_name = f"/{diagram_type}/{title}.md"
+    file_like = BytesIO(ai_data["response"]["detail"].encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await upload_to_supabase(upload_file)
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
     try:
         # Create diagram
-        new_diagram = Diagram(
+        new_diagram = Documents(
             project_id=project_id,
             user_id=current_user.id,
-            diagram_type=diagram_type,
-            title=title,
-            content_md=ai_data["response"]["detail"],
+            document_name=title,
+            document_type=diagram_type,
+            content=ai_data["response"]["detail"],
+            file_name=title,
+            file_path=path_in_bucket,
+            document_metadata={
+                "message": description,
+                "ai_response": ai_data,
+            },
         )
         db.add(new_diagram)
         db.flush()  # get generated diagram_id + version without commit
@@ -132,7 +122,7 @@ async def generate_usecase_diagram(
         # Create chat sessions
         new_ai_session = Chat_Session(
             session_id=new_diagram.version,
-            content_id=new_diagram.diagram_id,
+            content_id=new_diagram.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -142,7 +132,7 @@ async def generate_usecase_diagram(
 
         new_user_session = Chat_Session(
             session_id=new_diagram.version,
-            content_id=new_diagram.diagram_id,
+            content_id=new_diagram.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -167,13 +157,13 @@ async def generate_usecase_diagram(
     )
 
     return DiagramGenerateResponse(
-        diagram_id=str(new_diagram.diagram_id),
+        diagram_id=str(new_diagram.document_id),
         title=title,
         diagram_type=diagram_type,
         user_id=str(current_user.id),
         generated_at=str(generate_at),
         input_description=combined_input,
-        content_md=new_diagram.content_md,
+        content_md=new_diagram.content,
     )
 
 
@@ -189,11 +179,11 @@ async def update_usecase_diagram(
         f"User {current_user.email} requested update for diagram {diagram_id}"
     )
     diagram = (
-        db.query(Diagram)
+        db.query(Documents)
         .filter(
-            Diagram.project_id == project_id,
-            Diagram.diagram_id == diagram_id,
-            Diagram.user_id == current_user.id,
+            Documents.project_id == project_id,
+            Documents.document_id == diagram_id,
+            Documents.user_id == current_user.id,
         )
         .first()
     )
@@ -204,17 +194,27 @@ async def update_usecase_diagram(
             detail="Diagram not found or you do not have permission to update it.",
         )
 
-    diagram.content_md = content_md
+    diagram.content = content_md
+
+    file_name = f"/{diagram.document_type}/{diagram.document_name}.md"
+    file_like = BytesIO(diagram.content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await update_file_from_supabase(diagram.file_path, upload_file)
+
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+    
+    diagram.file_path = path_in_bucket
 
     db.commit()
     db.refresh(diagram)
 
     return DiagramUpdateResponse(
-        diagram_id=str(diagram.diagram_id),
-        title=diagram.title,
-        diagram_type=diagram.diagram_type,
+        diagram_id=str(diagram.document_id),
+        title=diagram.document_name,
+        diagram_type=diagram.document_type,
         update_at=str(diagram.updated_at),
-        content_md=diagram.content_md,
+        content_md=diagram.content,
     )
 
 
@@ -238,11 +238,11 @@ async def get_diagram(
             )
 
         diagram = (
-            db.query(Diagram)
+            db.query(Documents)
             .filter(
-                Diagram.project_id == project_id,
-                Diagram.diagram_id == diagram_id,
-                Diagram.user_id == current_user.id,
+                Documents.project_id == project_id,
+                Documents.document_id == diagram_id,
+                Documents.user_id == current_user.id,
             )
             .first()
         )
@@ -253,11 +253,11 @@ async def get_diagram(
             )
 
         return DiagramResponse(
-            diagram_id=str(diagram.diagram_id),
-            title=diagram.title,
-            diagram_type=diagram.diagram_type,
+            diagram_id=str(diagram.document_id),
+            title=diagram.document_name,
+            diagram_type=diagram.document_type,
             update_at=str(diagram.updated_at),
-            content_md=diagram.content_md,
+            content_md=diagram.content,
         )
 
     except HTTPException:
@@ -289,12 +289,12 @@ async def list_diagram(
             )
 
         diagram_list = (
-            db.query(Diagram)
+            db.query(Documents)
             .filter(
-                Diagram.user_id == current_user.id,
-                Diagram.project_id == project_id,
+                Documents.user_id == current_user.id,
+                Documents.project_id == project_id,
             )
-            .order_by(Diagram.updated_at.desc())
+            .order_by(Documents.updated_at.desc())
             .all()
         )
 
@@ -305,11 +305,11 @@ async def list_diagram(
         for diagram in diagram_list:
             result.append(
                 DiagramResponse(
-                    diagram_id=str(diagram.diagram_id),
-                    title=diagram.title,
-                    diagram_type=diagram.diagram_type,
+                    diagram_id=str(diagram.document_id),
+                    title=diagram.document_name,
+                    diagram_type=diagram.document_type,
                     update_at=str(diagram.updated_at),
-                    content_md=diagram.content_md,
+                    content_md=diagram.content,
                 )
             )
 
@@ -332,7 +332,6 @@ async def regenerate_srs(
     project_id: int,
     diagram_id: str,
     description: str = Form(...),
-    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -341,8 +340,8 @@ async def regenerate_srs(
     )
 
     existing_diagram = (
-        db.query(Diagram)
-        .filter(Diagram.diagram_id == diagram_id, Diagram.project_id == project_id)
+        db.query(Documents)
+        .filter(Documents.document_id == diagram_id, Documents.project_id == project_id)
         .first()
     )
     if not existing_diagram:
@@ -353,49 +352,38 @@ async def regenerate_srs(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    # existing_files_db = (
-    #     db.query(Document_Attachments)
-    #     .filter(Document_Attachments.document_id == document_id)
-    #     .all()
-    # )
-
-    # existing_files_uploadfile = await get_file_from_supabase(existing_files_db)
-
-    # ai_files = files + existing_files_uploadfile
-
-    if existing_diagram.diagram_type == "usecase":
+    if existing_diagram.document_type == "usecase":
         ai_service_url = settings.ai_service_url_diagram_usecase
-    elif existing_diagram.diagram_type == "class":
+    elif existing_diagram.document_type == "class":
         ai_service_url = settings.ai_service_url_diagram_class
-    elif existing_diagram.diagram_type == "activity":
+    elif existing_diagram.document_type == "activity":
         ai_service_url = settings.ai_service_url_diagram_activity
 
     ai_payload = {"message": description, "content_id": diagram_id}
-    ai_data = await call_ai_service(ai_service_url, ai_payload, files)
+    ai_data = await call_ai_service(ai_service_url, ai_payload)
 
-    existing_diagram.content_md = ai_data["response"]["detail"]
+    existing_diagram.content = ai_data["response"]["detail"]
     existing_diagram.version += 1
 
+    file_name = f"/{existing_diagram.document_type}/{existing_diagram.document_name}.md"
+    file_like = BytesIO(existing_diagram.content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await update_file_from_supabase(
+        existing_diagram.file_path, upload_file
+    )
+
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+    existing_diagram.file_path = path_in_bucket
+
     try:
-        # file_urls = []
-        # if files:
-        #     for file in files:
-        #         if not file.filename or not has_extension(file.filename):
-        #             continue
-        #         url = await upload_to_supabase(file)
-        #         if not url:
-        #             raise Exception(f"Failed to upload file {file.filename}")
-        #         new_file = Document_Attachments(
-        #             file_path=url, document_id=existing_doc.document_id
-        #         )
-        #         db.add(new_file)
-        #         file_urls.append(url)
 
         generate_at = datetime.now(timezone.utc)
 
         new_ai_session = Chat_Session(
             session_id=existing_diagram.version,
-            content_id=existing_diagram.diagram_id,
+            content_id=existing_diagram.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -405,7 +393,7 @@ async def regenerate_srs(
 
         new_user_session = Chat_Session(
             session_id=existing_diagram.version,
-            content_id=existing_diagram.diagram_id,
+            content_id=existing_diagram.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -418,11 +406,11 @@ async def regenerate_srs(
         db.refresh(existing_diagram)
 
         return DiagramResponse(
-            diagram_id=str(existing_diagram.diagram_id),
-            title=existing_diagram.title,
-            diagram_type=existing_diagram.diagram_type,
+            diagram_id=str(existing_diagram.document_id),
+            title=existing_diagram.document_name,
+            diagram_type=existing_diagram.document_type,
             update_at=str(existing_diagram.updated_at),
-            content_md=existing_diagram.content_md,
+            content_md=existing_diagram.content,
         )
 
     except Exception as e:

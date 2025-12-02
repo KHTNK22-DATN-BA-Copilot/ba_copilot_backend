@@ -15,9 +15,10 @@ from app.utils.file_handling import has_extension, upload_to_supabase
 router = APIRouter()
 
 
-@router.post("/upload", status_code=200)
+@router.post("/upload/{project_id}", status_code=200)
 async def upload(
-    project_id: int = Form(...),
+    project_id: int,
+    path: str=Form(),
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -40,7 +41,8 @@ async def upload(
             # 2) Upload bản RAW lên Supabase
             # ================================================================
             file.file.seek(0)
-            raw_url = await upload_to_supabase(file)
+            raw_filename = f"/user/{path}/{file.filename}"
+            raw_url = await upload_to_supabase(file,raw_filename)
 
             if not raw_url:
                 raise Exception(f"Failed to upload raw file {file.filename}")
@@ -69,7 +71,8 @@ async def upload(
             # ================================================================
             # 4) Upload file .md lên Supabase
             # ================================================================
-            md_filename = file.filename + ".md"
+            name_only = os.path.splitext(file.filename)[0]
+            md_filename = f"/user/{path}/{name_only}.md"
 
             with tempfile.NamedTemporaryFile("w", delete=False, suffix=".md") as md_tmp:
                 md_tmp.write(markdown_text)

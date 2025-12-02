@@ -19,9 +19,8 @@ from typing import List
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.srs import SRS
+from app.models.document import Documents
 from app.models.user import User
-from app.models.srs_attachment import Document_Attachments
 from app.models.session import Chat_Session
 from app.schemas.srs import (
     SRSGenerateResponse,
@@ -32,8 +31,8 @@ from app.schemas.srs import (
 from app.core.config import settings
 from app.utils.file_handling import (
     upload_to_supabase,
-    get_file_from_supabase,
-    has_extension
+    update_file_from_supabase,
+    has_extension,
 )
 from app.utils.srs_utils import (
     format_srs_to_markdown,
@@ -49,7 +48,6 @@ async def generate_srs(
     project_id: int = Form(...),
     project_name: str = Form(...),
     description: str = Form(...),
-    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -64,16 +62,24 @@ async def generate_srs(
 
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
-    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload, files)
+    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
 
     markdown_content = format_srs_to_markdown(ai_data["response"])
+    file_name = f"/srs/{project_name}.md"
+    file_like = BytesIO(markdown_content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await upload_to_supabase(upload_file)
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
-    new_doc = SRS(
+    new_doc = Documents(
         project_id=project_id,
         user_id=current_user.id,
-        project_name=project_name,
-        content_markdown=markdown_content,
-        status=ai_data.get("status", "generated"),
+        document_name=project_name,
+        document_type="srs",
+        content=markdown_content,
+        file_name=project_name,
+        file_path=path_in_bucket,
         document_metadata={
             "message": description,
             "ai_response": ai_data,
@@ -83,27 +89,6 @@ async def generate_srs(
     db.add(new_doc)
     db.commit()
     db.refresh(new_doc)
-
-    # try:
-    #     file_urls = []
-    #     if files:
-    #         for file in files:
-    #             if not file.filename or not has_extension(file.filename):
-    #                 continue
-    #             url = await upload_to_supabase(file)
-    #             if not url:
-    #                 raise Exception(f"Failed to upload file {file.filename}")
-    #             new_file = Document_Attachments(
-    #                 file_path=url, document_id=new_doc.document_id
-    #             )
-    #             db.add(new_file)
-    #             file_urls.append(url)
-    #     db.commit()
-    # except Exception as e:
-    #     db.rollback()
-    #     raise HTTPException(status_code=500, detail=str(e))
-
-    # logger.info(f"SRS generated and saved for project '{project_name}'")
 
     new_ai_session = Chat_Session(
         session_id=new_doc.version,
@@ -145,8 +130,8 @@ async def list_SRS(
     current_user: User = Depends(get_current_user),
 ):
     srs_list = (
-        db.query(SRS)
-        .filter(SRS.user_id == current_user.id, SRS.project_id == project_id)
+        db.query(Documents)
+        .filter(Documents.user_id == current_user.id, Documents.project_id == project_id)
         .all()
     )
 
@@ -156,8 +141,8 @@ async def list_SRS(
         result.append(
             GetSRSResponse(
                 document_id=str(srs_doc.document_id),
-                project_name=srs_doc.project_name,
-                content=srs_doc.content_markdown,
+                project_name=srs_doc.document_name,
+                content=srs_doc.content,
                 status=srs_doc.status,
                 updated_at=srs_doc.updated_at,
             )
@@ -174,11 +159,11 @@ async def get_srs_document(
     current_user: User = Depends(get_current_user),
 ):
     srs_doc = (
-        db.query(SRS)
+        db.query(Documents)
         .filter(
-            SRS.project_id == project_id,
-            SRS.document_id == document_id,
-            SRS.user_id == current_user.id,
+            Documents.project_id == project_id,
+            Documents.document_id == document_id,
+            Documents.user_id == current_user.id,
         )
         .first()
     )
@@ -192,8 +177,8 @@ async def get_srs_document(
 
     return GetSRSResponse(
         document_id=str(srs_doc.document_id),
-        project_name=srs_doc.project_name,
-        content=srs_doc.content_markdown,
+        project_name=srs_doc.document_name,
+        content=srs_doc.content,
         status=srs_doc.status,
         updated_at=srs_doc.updated_at,
     )
@@ -207,11 +192,11 @@ async def export_markdown(
     current_user: User = Depends(get_current_user),
 ):
     srs_doc = (
-        db.query(SRS)
+        db.query(Documents)
         .filter(
-            SRS.project_id == project_id,
-            SRS.document_id == document_id,
-            SRS.user_id == current_user.id,
+            Documents.project_id == project_id,
+            Documents.document_id == document_id,
+            Documents.user_id == current_user.id,
         )
         .first()
     )
@@ -223,8 +208,8 @@ async def export_markdown(
             status_code=403, detail="You don't have permission to access this document."
         )
     
-    file_stream = BytesIO(srs_doc.content_markdown.encode("utf-8"))
-    filename = f"{srs_doc.project_name.replace(' ', '_')}.md"
+    file_stream = BytesIO(srs_doc.content.encode("utf-8"))
+    filename = f"{srs_doc.document_name.replace(' ', '_')}.md"
 
     return StreamingResponse(
         file_stream,
@@ -256,11 +241,11 @@ async def update_usecase_diagram(
 
     logger.info(f"User {current_user.email} requested update for diagram {document_id}")
     srs_doc = (
-        db.query(SRS)
+        db.query(Documents)
         .filter(
-            SRS.project_id == project_id,
-            SRS.document_id == document_id,
-            SRS.user_id == current_user.id,
+            Documents.project_id == project_id,
+            Documents.document_id == document_id,
+            Documents.user_id == current_user.id,
         )
         .first()
     )
@@ -275,16 +260,25 @@ async def update_usecase_diagram(
         raise HTTPException(
             status_code=403, detail="You don't have permission to access this document."
         )
-    
-    srs_doc.content_markdown=content
+
+    srs_doc.content=content
     srs_doc.status = document_status
+
+    file_name = f"/srs/{srs_doc.document_name}.md"
+    file_like = BytesIO(srs_doc.content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await update_file_from_supabase(srs_doc.file_path, upload_file)
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+    
+    srs_doc.file_path=path_in_bucket
 
     db.commit()
     db.refresh(srs_doc)
 
     return UpdateSRSResponse(
         document_id=str(srs_doc.document_id),
-        project_name=srs_doc.project_name,
+        project_name=srs_doc.document_name,
         content=content,
         status=document_status,
         updated_at=srs_doc.updated_at,
@@ -298,7 +292,6 @@ async def regenerate_srs(
     project_id: int,
     document_id: str,
     description: str = Form(...),
-    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -307,8 +300,8 @@ async def regenerate_srs(
     )
 
     existing_doc = (
-        db.query(SRS)
-        .filter(SRS.document_id == document_id, SRS.project_id == project_id)
+        db.query(Documents)
+        .filter(Documents.document_id == document_id, Documents.project_id == project_id)
         .first()
     )
     if not existing_doc:
@@ -330,10 +323,10 @@ async def regenerate_srs(
     # ai_files = files + existing_files_uploadfile
 
     ai_payload = {"message": description, "content_id": document_id}
-    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload, files)
+    ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
     markdown_content = format_srs_to_markdown(ai_data["response"])
 
-    existing_doc.content_markdown = markdown_content
+    existing_doc.content = markdown_content
     existing_doc.version += 1
 
     existing_doc.document_metadata = {
@@ -341,6 +334,18 @@ async def regenerate_srs(
         "message": description,
         "ai_response": ai_data,
     }
+
+    file_name = f"/srs/{existing_doc.document_name}.md"
+    file_like = BytesIO(existing_doc.content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await update_file_from_supabase(
+        existing_doc.file_path, upload_file
+    )
+
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+    existing_doc.file_path = path_in_bucket
 
     try:
         # file_urls = []

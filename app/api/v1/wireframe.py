@@ -1,3 +1,4 @@
+from io import BytesIO
 import logging
 import json as json_lib
 import re
@@ -16,13 +17,14 @@ from typing import List, Tuple
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.wireframe import Wireframe
+from app.models.document import Documents
 from app.models.user import User
 from app.models.session import Chat_Session
 from app.core.config import settings
 from app.schemas.wireframe import WireframeGenerateResponse, WireframeListResponse
 from app.schemas.wireframe import GetWireframeResponse
 from app.utils.call_ai_service import call_ai_service
+from app.utils.file_handling import update_file_from_supabase, upload_to_supabase
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -87,7 +89,6 @@ Generate wireframe with HTML and CSS
 
 @router.post("/generate", response_model=WireframeGenerateResponse)
 async def generate_wireframe(
-    files: List[UploadFile],
     project_id: int = Form(...),
     device_type: str = Form(...),
     wireframe_name: str = Form(...),
@@ -98,30 +99,6 @@ async def generate_wireframe(
     logger.info(
         f"User {current_user.email} requested wireframe generation for {wireframe_name}"
     )
-
-    # Upload all files to Supabase
-    # file_urls: List[str] = []
-    # if files:
-    #     for file in files:
-    #         if not file.filename or not has_extension(file.filename):
-    #          continue
-    #         url = await upload_to_supabase(file)
-    #         if not url:
-    #             raise HTTPException(
-    #                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #                 detail=f"Failed to upload file {file.filename}",
-    #             )
-
-    #         new_file = ProjectFile(
-    #             file_path=url,
-    #             project_id=project_id,
-    #             user_id=current_user.id,
-    #             belong_to="wireframe",
-    #         )
-    #         db.add(new_file)
-    #         file_urls.append(url)
-
-    # db.commit()
 
     combined_input = f"""
         Project Description:
@@ -140,7 +117,7 @@ async def generate_wireframe(
     generate_at = datetime.now(timezone.utc)
     try:
         ai_data = await call_ai_service(
-            settings.ai_service_url_wireframe, ai_payload, files
+            settings.ai_service_url_wireframe, ai_payload
         )
     except HTTPException as http_exc:
         # Re-raise if it’s already an HTTPException from the AI service
@@ -153,17 +130,25 @@ async def generate_wireframe(
         )
 
     ai_content = ai_data.get("response", {}).get("content", "")
+    file_name = f"/wireframe/{wireframe_name}.md"
+    file_like = BytesIO(ai_content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await upload_to_supabase(upload_file)
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
     html_content, css_content = extract_html_css_from_content(ai_content)
     try:
-        new_doc = Wireframe(
+        new_doc = Documents(
             project_id=project_id,
             user_id=current_user.id,
-            title=wireframe_name,
-            description=combined_input,
-            html_content=html_content,
-            css_content=css_content,
-            wireframe_metadata={
-                # "files": file_urls,
+            document_name=wireframe_name,
+            document_type="wireframe",
+            content=ai_content,
+            file_name=wireframe_name,
+            file_path=path_in_bucket,
+            document_metadata={
+                "message": description,
                 "ai_response": ai_data,
             },
         )
@@ -174,7 +159,7 @@ async def generate_wireframe(
 
         new_user_session = Chat_Session(
             session_id=new_doc.version,
-            content_id=new_doc.wireframe_id,
+            content_id=new_doc.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="wireframe",
@@ -184,7 +169,7 @@ async def generate_wireframe(
 
         new_ai_session = Chat_Session(
             session_id=new_doc.version,
-            content_id=new_doc.wireframe_id,
+            content_id=new_doc.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="wireframe",
@@ -208,12 +193,12 @@ async def generate_wireframe(
     )
 
     return WireframeGenerateResponse(
-        wireframe_id=str(new_doc.wireframe_id),
+        wireframe_id=str(new_doc.document_id),
         user_id=str(current_user.id),
         generated_at=str(generate_at),
         input_description=combined_input,
-        html_content=new_doc.html_content,
-        css_content=new_doc.css_content,
+        html_content=html_content,
+        css_content=css_content,
     )
 
 
@@ -223,18 +208,18 @@ async def list_wireframes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    wireframes = db.query(Wireframe).filter(Wireframe.project_id == project_id).all()
+    wireframes = db.query(Documents).filter(Documents.project_id == project_id).all()
     result = []
     for wireframe in wireframes:
+        html_content, css_content = extract_html_css_from_content(wireframe.content)
         result.append(
             GetWireframeResponse(
-                wireframe_id=str(wireframe.wireframe_id),
+                wireframe_id=str(wireframe.document_id),
                 project_id=wireframe.project_id,
                 user_id=wireframe.user_id,
-                title=wireframe.title,
-                description=wireframe.description,
-                html_content=wireframe.html_content,
-                css_content=wireframe.css_content,
+                title=wireframe.document_name,
+                html_content=html_content,
+                css_content=css_content,
                 created_at=wireframe.created_at,
                 updated_at=wireframe.updated_at,
             )
@@ -248,9 +233,9 @@ async def get_wireframe(
     current_user: User = Depends(get_current_user),
 ):
     wireframe = (
-        db.query(Wireframe)
+        db.query(Documents)
         .filter(
-            Wireframe.wireframe_id == wireframe_id, Wireframe.user_id == current_user.id
+            Documents.document_id == wireframe_id, Documents.user_id == current_user.id
         )
         .first()
     )
@@ -259,14 +244,14 @@ async def get_wireframe(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Wireframe not found",
         )
+    html_content, css_content = extract_html_css_from_content(wireframe.content)
     return GetWireframeResponse(
-        wireframe_id=str(wireframe.wireframe_id),
+        wireframe_id=str(wireframe.document_id),
         project_id=wireframe.project_id,
         user_id=wireframe.user_id,
-        title=wireframe.title,
-        description=wireframe.description,
-        html_content=wireframe.html_content,
-        css_content=wireframe.css_content,
+        title=wireframe.document_name,
+        html_content=html_content,
+        css_content=css_content,
         created_at=wireframe.created_at,
         updated_at=wireframe.updated_at,
     )
@@ -277,7 +262,6 @@ async def regenerate_srs(
     project_id: int,
     wireframe_id: str,
     description: str = Form(...),
-    files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -286,9 +270,9 @@ async def regenerate_srs(
     )
 
     existing_wireframe = (
-        db.query(Wireframe)
+        db.query(Documents)
         .filter(
-            Wireframe.wireframe_id == wireframe_id, Wireframe.project_id == project_id
+            Documents.document_id == wireframe_id, Documents.project_id == project_id
         )
         .first()
     )
@@ -300,21 +284,11 @@ async def regenerate_srs(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    # existing_files_db = (
-    #     db.query(Document_Attachments)
-    #     .filter(Document_Attachments.document_id == document_id)
-    #     .all()
-    # )
-
-    # existing_files_uploadfile = await get_file_from_supabase(existing_files_db)
-
-    # ai_files = files + existing_files_uploadfile
-
     ai_payload = {"message": description, "content_id": wireframe_id}
 
     try:
         ai_data = await call_ai_service(
-            settings.ai_service_url_wireframe, ai_payload, files
+            settings.ai_service_url_wireframe, ai_payload
         )
     except HTTPException as http_exc:
         # Re-raise if it’s already an HTTPException from the AI service
@@ -328,10 +302,20 @@ async def regenerate_srs(
 
     ai_content = ai_data.get("response", {}).get("content", "")
     html_content, css_content = extract_html_css_from_content(ai_content)
-
-    existing_wireframe.html_content=html_content
-    existing_wireframe.css_content=css_content
+    existing_wireframe.content=ai_content
     existing_wireframe.version += 1
+
+    file_name = f"/wireframe/{existing_wireframe.document_name}.md"
+    file_like = BytesIO(existing_wireframe.content.encode("utf-8"))
+    upload_file = UploadFile(filename=file_name, file=file_like)
+    path_in_bucket = await update_file_from_supabase(
+        existing_wireframe.file_path, upload_file
+    )
+
+    if path_in_bucket is None:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+    existing_wireframe.file_path = path_in_bucket
 
     try:
         # file_urls = []
@@ -352,20 +336,20 @@ async def regenerate_srs(
 
         new_user_session = Chat_Session(
             session_id=existing_wireframe.version,
-            content_id=existing_wireframe.wireframe_id,
+            content_id=existing_wireframe.document_id,
             project_id=project_id,
             user_id=current_user.id,
-            content_type="diagram",
+            content_type="wireframe",
             role="user",
             message=description,
         )
 
         new_ai_session = Chat_Session(
             session_id=existing_wireframe.version,
-            content_id=existing_wireframe.wireframe_id,
+            content_id=existing_wireframe.document_id,
             project_id=project_id,
             user_id=current_user.id,
-            content_type="diagram",
+            content_type="wireframe",
             role="ai",
             message=json.dumps(ai_data["response"]),
         )
@@ -375,13 +359,12 @@ async def regenerate_srs(
         db.refresh(existing_wireframe)
 
         return GetWireframeResponse(
-            wireframe_id=str(existing_wireframe.wireframe_id),
+            wireframe_id=str(existing_wireframe.document_id),
             project_id=existing_wireframe.project_id,
             user_id=existing_wireframe.user_id,
-            title=existing_wireframe.title,
-            description=existing_wireframe.description,
-            html_content=existing_wireframe.html_content,
-            css_content=existing_wireframe.css_content,
+            title=existing_wireframe.document_name,
+            html_content=html_content,
+            css_content=css_content,
             created_at=existing_wireframe.created_at,
             updated_at=existing_wireframe.updated_at,
         )

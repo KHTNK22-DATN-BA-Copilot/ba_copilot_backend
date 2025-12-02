@@ -23,16 +23,16 @@ def sanitize_filename(filename: str) -> str:
 
     name = re.sub(r"\s+", "_", name)
 
-    name = re.sub(r"[^a-zA-Z0-9._-]", "", name)
+    name = re.sub(r"[^a-zA-Z0-9._/-]", "", name)
 
-    return f"{uuid.uuid4()}_{name}{ext}"
+    return f"{name}{ext}"
 
 
-async def upload_to_supabase(file: UploadFile) -> str | None:
+async def upload_to_supabase(file: UploadFile,new_name:str|None=None) -> str | None:
     """Upload file lên Supabase và trả về public URL."""
     try:
-        file_name = f"{file.filename}"
-        new_file_name=sanitize_filename(file_name)
+        filename_to_use = new_name if new_name else file.filename
+        new_file_name = sanitize_filename(filename_to_use)
         file_data = await file.read()
 
         res = supabase.storage.from_(SUPABASE_BUCKET).upload(new_file_name, file_data)
@@ -41,21 +41,21 @@ async def upload_to_supabase(file: UploadFile) -> str | None:
             logger.error(f"Failed to upload {file.filename}")
             return None
 
-        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(
-            new_file_name
-        )
-        index = public_url.find(SUPABASE_BUCKET)
-        path_in_bucket = public_url[index + len(SUPABASE_BUCKET) + 1 :]
+        # public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(
+        #     new_file_name
+        # )
+        # index = public_url.find(SUPABASE_BUCKET)
+        # path_in_bucket = public_url[index + len(SUPABASE_BUCKET) + 1 :]
 
-        logger.info(f"Uploaded {file.filename} to Supabase → {path_in_bucket}")
-        return path_in_bucket
+        logger.info(f"Uploaded {file.filename} to Supabase → {res.path}")
+        return res.path
 
     except Exception as e:
         logger.exception(f"Upload failed for {file.filename}: {e}")
         return None
 
 
-async def get_file_from_supabase(existing_files_db: List):
+async def list_file_from_supabase(existing_files_db: List):
     existing_files_uploadfile = []
     for file in existing_files_db:
         try:
@@ -70,6 +70,18 @@ async def get_file_from_supabase(existing_files_db: List):
         except Exception as e:
             logger.exception(f"Error when getting file '{file}': {e}")
     return existing_files_uploadfile
+
+
+async def update_file_from_supabase(file_path: str,file: UploadFile) -> str | None:
+
+    file_data = await file.read()
+    try:
+        res = supabase.storage.from_(SUPABASE_BUCKET).update(file_path,file_data)
+        return res.path
+
+    except Exception as e:
+        logger.exception(f"Error when getting file '{file_path}': {e}")
+        return None
 
 
 async def extract_text_from_file(file: UploadFile) -> str:

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def call_ai_service(
     ai_service_url: str,
     payload: Dict[str, Any],
-    files: List[UploadFile],
+   
     retries: int = 3,
     timeout: int = 120,
 ):
@@ -23,15 +23,15 @@ async def call_ai_service(
         key: ("" if value is None else str(value)) for key, value in payload.items()
     }
 
-    file_data = []
-    if files:
-        for f in files:
-            if not f.filename or not has_extension(f.filename):
-                continue
-            content = await f.read()
-            file_data.append(
-                ("files", (f.filename, io.BytesIO(content), f.content_type))
-            )
+    # file_data = []
+    # if files:
+    #     for f in files:
+    #         if not f.filename or not has_extension(f.filename):
+    #             continue
+    #         content = await f.read()
+    #         file_data.append(
+    #             ("files", (f.filename, io.BytesIO(content), f.content_type))
+    #         )
 
     for attempt in range(1, retries + 1):
         try:
@@ -39,7 +39,6 @@ async def call_ai_service(
                 response = await client.post(
                     ai_service_url,
                     data=form_data,
-                    files=file_data if file_data else None,
                 )
 
             if response.status_code == 200:

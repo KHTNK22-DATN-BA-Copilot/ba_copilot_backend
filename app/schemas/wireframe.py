@@ -27,7 +27,6 @@ class GetWireframeResponse(BaseModel):
     project_id: int
     user_id: int
     title: str
-    description: str
     html_content: str
     css_content: str | None
     created_at: datetime
