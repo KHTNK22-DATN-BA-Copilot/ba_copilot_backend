@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth, user,srs,wireframe, project_router,diagram,session,file_upload
-from app.models import project,conversation,message
+from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload
 from app.core.database import engine, Base
 import logging
 import time
@@ -24,7 +23,7 @@ app.include_router(
 )
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
 app.include_router(file_upload.router, prefix="/api/v1/files", tags=["file"])
-
+app.include_router(session.router, prefix="/api/v1/sessions")
 
 # Configure CORS
 app.add_middleware(
