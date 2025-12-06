@@ -29,6 +29,7 @@ from app.schemas.srs import (
     UpdateSRSResponse,
 )
 from app.core.config import settings
+from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.file_handling import (
     upload_to_supabase,
     update_file_from_supabase,
@@ -56,6 +57,11 @@ async def generate_srs(
         f"User {current_user.email} requested SRS generation for {project_name}"
     )
 
+    unique_title = get_unique_diagram_name(db, project_name, project_id, "srs")
+
+    logger.info(
+        f"Original title: '{project_name}', Unique title chosen: '{unique_title}'"
+    )
     ai_payload = {
         "message": description,
     }
@@ -65,7 +71,7 @@ async def generate_srs(
     ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
 
     markdown_content = format_srs_to_markdown(ai_data["response"])
-    file_name = f"/srs/{project_name}.md"
+    file_name = f"/srs/{unique_title}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -75,10 +81,10 @@ async def generate_srs(
     new_doc = Documents(
         project_id=project_id,
         user_id=current_user.id,
-        document_name=project_name,
+        document_name=unique_title,
         document_type="srs",
         content=markdown_content,
-        file_name=project_name,
+        file_name=unique_title,
         file_path=path_in_bucket,
         document_metadata={
             "message": description,
@@ -129,9 +135,14 @@ async def list_SRS(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    document_type = "srs"
     srs_list = (
         db.query(Documents)
-        .filter(Documents.user_id == current_user.id, Documents.project_id == project_id)
+        .filter(
+            Documents.user_id == current_user.id,
+            Documents.project_id == project_id,
+            Documents.document_type == document_type,
+        )
         .all()
     )
 
@@ -158,12 +169,14 @@ async def get_srs_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    document_type = "srs"
     srs_doc = (
         db.query(Documents)
         .filter(
             Documents.project_id == project_id,
             Documents.document_id == document_id,
             Documents.user_id == current_user.id,
+            Documents.document_type == document_type,
         )
         .first()
     )
@@ -191,12 +204,14 @@ async def export_markdown(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    document_type = "srs"
     srs_doc = (
         db.query(Documents)
         .filter(
             Documents.project_id == project_id,
             Documents.document_id == document_id,
             Documents.user_id == current_user.id,
+            Documents.document_type == document_type,
         )
         .first()
     )
@@ -207,7 +222,7 @@ async def export_markdown(
         raise HTTPException(
             status_code=403, detail="You don't have permission to access this document."
         )
-    
+
     file_stream = BytesIO(srs_doc.content.encode("utf-8"))
     filename = f"{srs_doc.document_name.replace(' ', '_')}.md"
 
@@ -240,12 +255,14 @@ async def update_usecase_diagram(
         )
 
     logger.info(f"User {current_user.email} requested update for diagram {document_id}")
+    document_type = "srs"
     srs_doc = (
         db.query(Documents)
         .filter(
             Documents.project_id == project_id,
             Documents.document_id == document_id,
             Documents.user_id == current_user.id,
+            Documents.document_type == document_type,
         )
         .first()
     )
@@ -261,7 +278,7 @@ async def update_usecase_diagram(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    srs_doc.content=content
+    srs_doc.content = content
     srs_doc.status = document_status
 
     file_name = f"/srs/{srs_doc.document_name}.md"
@@ -270,8 +287,8 @@ async def update_usecase_diagram(
     path_in_bucket = await update_file_from_supabase(srs_doc.file_path, upload_file)
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
-    
-    srs_doc.file_path=path_in_bucket
+
+    srs_doc.file_path = path_in_bucket
 
     db.commit()
     db.refresh(srs_doc)
@@ -298,16 +315,20 @@ async def regenerate_srs(
     logger.info(
         f"User {current_user.email} requested SRS regeneration for {document_id}"
     )
-
+    document_type = "srs"
     existing_doc = (
         db.query(Documents)
-        .filter(Documents.document_id == document_id, Documents.project_id == project_id)
+        .filter(
+            Documents.document_id == document_id,
+            Documents.project_id == project_id,
+            Documents.document_type == document_type,
+        )
         .first()
     )
     if not existing_doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if current_user.id!=existing_doc.user_id:
+    if current_user.id != existing_doc.user_id:
         raise HTTPException(
             status_code=403, detail="You don't have permission to access this document."
         )

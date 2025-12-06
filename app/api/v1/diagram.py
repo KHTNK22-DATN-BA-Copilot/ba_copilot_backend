@@ -26,19 +26,21 @@ from app.schemas.diagram import (
     DiagramGenerateResponse,
     DiagramResponse,
     DiagramListResponse,
-    DiagramUpdateResponse
+    DiagramUpdateResponse,
 )
 from app.utils.mock_data.diagram_mock_data import get_mock_data
 
 from app.utils.file_handling import (
     update_file_from_supabase,
     upload_to_supabase,
-    has_extension
+    has_extension,
 )
 from app.utils.call_ai_service import call_ai_service
+from app.utils.get_unique_name import get_unique_diagram_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 # generate usecase-diagram
 @router.post("/generate", response_model=DiagramGenerateResponse)
@@ -54,12 +56,23 @@ async def generate_usecase_diagram(
         f"User {current_user.email} requested generation for {diagram_type} diagram"
     )
 
-    valid_diagram_types = ["sequence", "architecture", "usecase", "flowchart", "class", "activity"]
+    valid_diagram_types = [
+        "sequence",
+        "architecture",
+        "usecase",
+        "flowchart",
+        "class",
+        "activity",
+    ]
     if diagram_type not in valid_diagram_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid diagram_type '{diagram_type}'. Must be one of {valid_diagram_types}.",
         )
+
+    unique_title = get_unique_diagram_name(db, title, project_id, diagram_type)
+
+    logger.info(f"Original title: '{title}', Unique title chosen: '{unique_title}'")
 
     combined_input = f"""
         Project Description:
@@ -94,7 +107,7 @@ async def generate_usecase_diagram(
         ai_data = {"response": get_mock_data(diagram_type)}
         ai_response = ai_data["response"]
 
-    file_name = f"/{diagram_type}/{title}.md"
+    file_name = f"/{diagram_type}/{unique_title}.md"
     file_like = BytesIO(ai_data["response"]["detail"].encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -106,10 +119,10 @@ async def generate_usecase_diagram(
         new_diagram = Documents(
             project_id=project_id,
             user_id=current_user.id,
-            document_name=title,
+            document_name=unique_title,
             document_type=diagram_type,
             content=ai_data["response"]["detail"],
-            file_name=title,
+            file_name=unique_title,
             file_path=path_in_bucket,
             document_metadata={
                 "message": description,
@@ -158,7 +171,7 @@ async def generate_usecase_diagram(
 
     return DiagramGenerateResponse(
         diagram_id=str(new_diagram.document_id),
-        title=title,
+        title=unique_title,
         diagram_type=diagram_type,
         user_id=str(current_user.id),
         generated_at=str(generate_at),
@@ -171,26 +184,26 @@ async def generate_usecase_diagram(
 async def update_usecase_diagram(
     project_id: str,
     diagram_id: str,
+    diagram_type: str,
     content_md: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    logger.info(
-        f"User {current_user.email} requested update for diagram {diagram_id}"
-    )
+    logger.info(f"User {current_user.email} requested update for diagram {diagram_id}")
     diagram = (
         db.query(Documents)
         .filter(
             Documents.project_id == project_id,
             Documents.document_id == diagram_id,
             Documents.user_id == current_user.id,
+            Documents.document_type == diagram_type,
         )
         .first()
     )
 
     if not diagram:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Diagram not found or you do not have permission to update it.",
         )
 
@@ -203,7 +216,7 @@ async def update_usecase_diagram(
 
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
-    
+
     diagram.file_path = path_in_bucket
 
     db.commit()
@@ -237,18 +250,21 @@ async def get_diagram(
                 detail="You don't have access to this project",
             )
 
+        valid_diagram_types = {"class", "usecase", "activity"}
+
         diagram = (
             db.query(Documents)
             .filter(
                 Documents.project_id == project_id,
                 Documents.document_id == diagram_id,
                 Documents.user_id == current_user.id,
+                Documents.document_type.in_(valid_diagram_types),
             )
             .first()
         )
         if not diagram:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Diagram with id {diagram_id} not found",
             )
 
@@ -277,6 +293,8 @@ async def list_diagram(
     current_user: User = Depends(get_current_user),
 ):
     try:
+        valid_diagram_types = {"class", "usecase", "activity"}
+
         project = (
             db.query(Project)
             .filter(Project.id == project_id, Project.user_id == current_user.id)
@@ -293,6 +311,7 @@ async def list_diagram(
             .filter(
                 Documents.user_id == current_user.id,
                 Documents.project_id == project_id,
+                Documents.document_type.in_(valid_diagram_types),
             )
             .order_by(Documents.updated_at.desc())
             .all()
@@ -325,9 +344,7 @@ async def list_diagram(
         )
 
 
-@router.patch(
-    "/regenerate/{project_id}/{diagram_id}", response_model=DiagramResponse
-)
+@router.patch("/regenerate/{project_id}/{diagram_id}", response_model=DiagramResponse)
 async def regenerate_srs(
     project_id: int,
     diagram_id: str,
@@ -338,10 +355,15 @@ async def regenerate_srs(
     logger.info(
         f"User {current_user.email} requested SRS regeneration for {diagram_id}"
     )
-
+    valid_diagram_types = {"class", "usecase", "activity"}
     existing_diagram = (
         db.query(Documents)
-        .filter(Documents.document_id == diagram_id, Documents.project_id == project_id)
+        .filter(
+            Documents.document_id == diagram_id,
+            Documents.project_id == project_id,
+            Documents.user_id == current_user.id,
+            Documents.document_type.in_(valid_diagram_types),
+        )
         .first()
     )
     if not existing_diagram:

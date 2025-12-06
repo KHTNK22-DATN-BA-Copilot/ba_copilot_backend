@@ -41,12 +41,6 @@ async def upload_to_supabase(file: UploadFile,new_name:str|None=None) -> str | N
             logger.error(f"Failed to upload {file.filename}")
             return None
 
-        # public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(
-        #     new_file_name
-        # )
-        # index = public_url.find(SUPABASE_BUCKET)
-        # path_in_bucket = public_url[index + len(SUPABASE_BUCKET) + 1 :]
-
         logger.info(f"Uploaded {file.filename} to Supabase → {res.path}")
         return res.path
 
