@@ -18,8 +18,8 @@ class WireframeGenerateResponse(BaseModel):
     )
     # figma_link: str = Field(..., description="Link Wireframe in Figma")
     # wireframe_description:str=Field(...,description="Wireframe description after generate")
-    html_content: str = Field(..., description="Wireframe HTML content")
-    css_content: str = Field(..., description="Wireframe CSS content")
+    html_content: str | None = Field( default=None, description="Wireframe HTML content")
+    css_content: str | None = Field( default=None, description="Wireframe CSS content")
 
 
 class GetWireframeResponse(BaseModel):
