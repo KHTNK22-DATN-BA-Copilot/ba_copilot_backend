@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input id="pid" placeholder="project id" value="1">
+<input id="token" placeholder="token here">
+<button onclick="start()">Start</button>
+
+<div id="actions" style="display:none; margin-top:10px;">
+  <button onclick="sendYes()">Continue</button>
+  <button onclick="closeWS()">Close</button>
+</div>
+
+<ul id="log"></ul>
+
+<script>
+let ws
+
+function log(m){
+  let li = document.createElement("li")
+  li.innerText = m
+  document.getElementById("log").appendChild(li)
+}
+
+function start(){
+  const pid = document.getElementById("pid").value
+  const token = document.getElementById("token").value
+
+  if(!token){
+    alert("Please enter token!")
+    return
+  }
+
+  ws = new WebSocket(`ws://localhost:8010/ws/one-click/${pid}?token=${token}`)
+
+  ws.onopen = () => {
+    log("WS connected")
+  }
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      log(JSON.stringify(data))
+
+      if(data.action === "confirm_continue"){
+        showActions()
+        return
+      }
+
+    } catch (err) {
+      log(event.data)
+    }
+  }
+
+  ws.onerror = (err) => {
+    log("WS error: " + err.message)
+  }
+
+  ws.onclose = () => {
+    log("WS closed")
+    hideActions()
+  }
+
+}
+
+function showActions(){
+  document.getElementById("actions").style.display = "block"
+}
+
+function hideActions(){
+  document.getElementById("actions").style.display = "none"
+}
+
+function sendYes(){
+  if(ws && ws.readyState === WebSocket.OPEN){
+    ws.send("yes")
+    log("send yes")
+    hideActions()
+  }
+}
+
+function closeWS(){
+  if(ws){
+    ws.close()
+    log("WS manually closed")
+  }
+}
+</script>
+</body>
+</html>

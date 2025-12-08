@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from io import BytesIO
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
@@ -48,7 +48,7 @@ router = APIRouter()
 async def generate_srs(
     project_id: int = Form(...),
     project_name: str = Form(...),
-    description: str = Form(...),
+    description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -308,7 +308,7 @@ async def update_usecase_diagram(
 async def regenerate_srs(
     project_id: int,
     document_id: str,
-    description: str = Form(...),
+    description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

@@ -13,7 +13,7 @@ from fastapi import (
 )
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
@@ -93,7 +93,7 @@ async def generate_wireframe(
     project_id: int = Form(...),
     device_type: str = Form(...),
     wireframe_name: str = Form(...),
-    description: str = Form(...),
+    description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -281,7 +281,7 @@ async def get_wireframe(
 async def regenerate_srs(
     project_id: int,
     wireframe_id: str,
-    description: str = Form(...),
+    description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
