@@ -1,5 +1,6 @@
+from sys import prefix
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload
+from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload, folder
 from app.core.database import engine, Base
 import logging
 import time
@@ -24,6 +25,7 @@ app.include_router(
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
 app.include_router(file_upload.router, prefix="/api/v1/files", tags=["file"])
 app.include_router(session.router, prefix="/api/v1/sessions")
+app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
 
 # Configure CORS
 app.add_middleware(
