@@ -10,6 +10,7 @@ class ProjectMdFile(Base):
     id = Column(Integer, primary_key=True, index=True)
     raw_file_id=Column(Integer,ForeignKey("project_raw_files.id"))
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     file_name=Column(String,nullable=True)
     file_path = Column(String(100), nullable=False)

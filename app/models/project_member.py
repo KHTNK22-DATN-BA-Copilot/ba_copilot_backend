@@ -1,21 +1,20 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.sql import func
 from app.core.database import Base
 
 
-class ProjectRawFile(Base):
-    __tablename__ = "project_raw_files"
+class ProjectMember(Base):
+    __tablename__ = "project_members"
 
-    id = Column(Integer, primary_key=True, index=True)
-    file_path = Column(String(100), nullable=False)
-    file_name=Column(String,nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
- 
+    __table_args__ = (
+        PrimaryKeyConstraint("project_id", "user_id"),
+    )
+
