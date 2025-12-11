@@ -1,5 +1,6 @@
+from sys import prefix
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload,one_click
+from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload,one_click,folder
 from app.core.database import engine, Base
 import logging
 import time
@@ -25,8 +26,8 @@ app.include_router(
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
 app.include_router(file_upload.router, prefix="/api/v1/files", tags=["file"])
 app.include_router(session.router, prefix="/api/v1/sessions",tags=["chat history"])
+app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
 app.include_router(one_click.router, prefix="/api/v1/one-click",tags=["one click flow"])
-
 
 
 # Configure CORS

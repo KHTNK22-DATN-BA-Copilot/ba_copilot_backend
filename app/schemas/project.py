@@ -1,5 +1,8 @@
+
+from app.schemas.folder import FolderNode, GetFolderResponse
+from app.schemas.file import GetFileResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 from enum import Enum
 from datetime import datetime, timedelta,timezone
 class ProjectStatus(str, Enum):
@@ -54,3 +57,14 @@ class ProjectListResponse(BaseModel):
 
 class DeleteProjectResponse(BaseModel):
     message: str = Field(..., description="Status message confirming deletion")
+
+class GetProjectChildResponse(BaseModel): 
+    folders: List[GetFolderResponse]
+    files: List[GetFileResponse]
+
+class TreeStructure(BaseModel):
+    folders: List[FolderNode]
+    files: List[GetFileResponse]
+class GetProjectTreeResponse(BaseModel): 
+    project_id: int
+    tree: TreeStructure

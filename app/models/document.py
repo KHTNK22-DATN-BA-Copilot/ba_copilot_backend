@@ -20,6 +20,7 @@ class Documents(Base):
 
     document_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     document_name = Column(String(255), nullable=False)
     document_type = Column(String(255), nullable=False)
