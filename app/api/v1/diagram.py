@@ -14,7 +14,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.document import Documents
@@ -48,7 +48,7 @@ async def generate_usecase_diagram(
     project_id: int = Form(...),
     diagram_type: str = Form(...),
     title: str = Form(...),
-    description: str = Form(...),
+    description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -348,7 +348,7 @@ async def list_diagram(
 async def regenerate_srs(
     project_id: int,
     diagram_id: str,
-    description: str = Form(...),
+    description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
