@@ -12,11 +12,9 @@ from fastapi import (
 )
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List, Optional, Tuple
-import json
+from typing import Optional, Tuple
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.document import Documents
 from app.models.file import Files
 from app.models.file import Files
 from app.models.user import User

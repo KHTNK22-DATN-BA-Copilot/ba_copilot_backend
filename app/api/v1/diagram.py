@@ -7,18 +7,15 @@ from fastapi import (
     HTTPException,
     status,
     UploadFile,
-    File,
     Form,
 )
 
-from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.file import Files
-from app.models.folder import Folder
 from app.models.user import User
 from app.models.project import Project
 from app.models.session import Chat_Session

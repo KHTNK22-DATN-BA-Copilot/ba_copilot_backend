@@ -7,8 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.database import get_db
-# from app.models.project_raw_file import ProjectRawFile
-# from app.models.project_md_file import ProjectMdFile
 from app.models.file import Files
 from app.models.user import User
 from app.utils.file_handling import has_extension, upload_to_supabase

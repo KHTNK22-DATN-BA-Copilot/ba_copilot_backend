@@ -6,10 +6,8 @@ from fastapi import (
     HTTPException,
     status,
     UploadFile,
-    File,
     Form,
-    Query,
-    Response,
+
 )
 from fastapi.responses import StreamingResponse
 from io import BytesIO
@@ -19,7 +17,6 @@ from typing import List, Optional
 import json
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.document import Documents
 from app.models.user import User
 from app.models.file import Files
 from app.models.folder import Folder
