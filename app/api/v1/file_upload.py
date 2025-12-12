@@ -7,17 +7,19 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.database import get_db
-from app.models.project_raw_file import ProjectRawFile
-from app.models.project_md_file import ProjectMdFile
+# from app.models.project_raw_file import ProjectRawFile
+# from app.models.project_md_file import ProjectMdFile
+from app.models.file import Files
 from app.models.user import User
 from app.utils.file_handling import has_extension, upload_to_supabase
 
 router = APIRouter()
 
 
-@router.post("/upload/{project_id}", status_code=200)
+@router.post("/upload/{project_id}/{folder_id}", status_code=200)
 async def upload(
     project_id: int,
+    folder_id:int,
     path: str=Form(),
     files: List[UploadFile] = File([]),
     db: Session = Depends(get_db),
@@ -47,14 +49,6 @@ async def upload(
             if not raw_url:
                 raise Exception(f"Failed to upload raw file {file.filename}")
 
-            raw_record = ProjectRawFile(
-                file_path=raw_url,
-                file_name=file.filename,
-                project_id=project_id,
-                user_id=current_user.id,
-            )
-            db.add(raw_record)
-            db.flush()
 
             # ================================================================
             # 3) Convert RAW → Markdown
@@ -85,15 +79,17 @@ async def upload(
             if not md_url:
                 raise Exception(f"Failed to upload md file for {file.filename}")
 
-            md_record = ProjectMdFile(
-                raw_file_id=raw_record.id,
-                project_id=project_id,
-                user_id=current_user.id,
-                file_name=md_filename,
-                file_path=md_url,
-            )
-            db.add(md_record)
-
+        raw_record = Files(
+            project_id=project_id,
+            folder_id=folder_id,
+            created_by=current_user.id,
+            name=file.filename,
+            storage_path=raw_url,
+            storage_md_path=md_url,
+            file_category="user upload",
+            file_type= file.content_type
+        )
+        db.add(raw_record)
         db.commit()
 
         # Chỉ trả về status code 200, không trả về dữ liệu

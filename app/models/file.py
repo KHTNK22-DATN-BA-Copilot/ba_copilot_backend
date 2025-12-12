@@ -3,7 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from app.core.database import Base
 
-class File(Base):
+class Files(Base):
     __tablename__ = "files"
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
@@ -14,6 +14,7 @@ class File(Base):
     name = Column(String(255), nullable=False)
     extension = Column(String(32), nullable=True)
     storage_path = Column(String(512), nullable=True)
+    storage_md_path=Column(String(512),nullable=True)
     content = Column(Text, nullable=True)
     file_category = Column(String(50), nullable=False)
     file_type = Column(String(50), nullable=False)

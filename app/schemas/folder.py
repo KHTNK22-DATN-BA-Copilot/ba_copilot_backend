@@ -17,6 +17,14 @@ class CreateFolderResponse(BaseModel):
     created_by: int = Field(..., description="The user id who created the folder")
     created_at: datetime = Field(..., description="The creation time of the folder")
     updated_at: datetime = Field(..., description="The update time of the folder")
+    model_config = {"from_attributes": True}
+
+
+class CreateFolderResult(BaseModel):
+    folder: Optional[CreateFolderResponse] = None
+    error: Optional[str] = None
+    detail: Optional[str] = None
+
 
 class UpdateFolderRequest(BaseModel):
     name: Optional[str] = Field(None, description="The name of the folder")
@@ -58,6 +66,3 @@ class GetFolderChildrenReponse(BaseModel):
 class FolderNode(GetFolderResponse): 
     folders: List[FolderNode] = []
     files: List[GetFileResponse] = []
-
-
-

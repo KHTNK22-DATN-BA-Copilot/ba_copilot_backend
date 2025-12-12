@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.document import Documents
+from app.models.file import Files
+from app.models.folder import Folder
 from app.models.user import User
 from app.models.project import Project
 from app.models.session import Chat_Session
@@ -33,10 +34,11 @@ from app.utils.mock_data.diagram_mock_data import get_mock_data
 from app.utils.file_handling import (
     update_file_from_supabase,
     upload_to_supabase,
-    has_extension,
 )
+from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.get_unique_name import get_unique_diagram_name
+from app.schemas.folder import CreateFolderRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -69,6 +71,18 @@ async def generate_usecase_diagram(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid diagram_type '{diagram_type}'. Must be one of {valid_diagram_types}.",
         )
+
+    new_folder = CreateFolderRequest(
+        name=diagram_type,
+    )
+    result = await create_default_folder(project_id, new_folder, current_user.id, db)
+
+    if result.error:
+        raise HTTPException(
+            status_code=500, detail="Failed to create folder to storage"
+        )
+
+    folder = result.folder
 
     unique_title = get_unique_diagram_name(db, title, project_id, diagram_type)
 
@@ -115,27 +129,30 @@ async def generate_usecase_diagram(
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
     try:
-        # Create diagram
-        new_diagram = Documents(
+
+        new_file = Files(
             project_id=project_id,
-            user_id=current_user.id,
-            document_name=unique_title,
-            document_type=diagram_type,
+            folder_id=folder.id,
+            created_by=current_user.id,
+            updated_by=current_user.id,
+            name=unique_title,
+            extension=".md",
+            storage_path=path_in_bucket,
             content=ai_data["response"]["detail"],
-            file_name=unique_title,
-            file_path=path_in_bucket,
-            document_metadata={
+            file_category="ai gen",
+            file_type=diagram_type,
+            metadata={
                 "message": description,
                 "ai_response": ai_data,
             },
         )
-        db.add(new_diagram)
+        db.add(new_file)
         db.flush()  # get generated diagram_id + version without commit
 
         # Create chat sessions
         new_ai_session = Chat_Session(
-            session_id=new_diagram.version,
-            content_id=new_diagram.document_id,
+            
+            content_id=new_file.id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -144,8 +161,7 @@ async def generate_usecase_diagram(
         )
 
         new_user_session = Chat_Session(
-            session_id=new_diagram.version,
-            content_id=new_diagram.document_id,
+            content_id=new_file.id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -155,7 +171,7 @@ async def generate_usecase_diagram(
 
         db.add_all([new_ai_session, new_user_session])
         db.commit()
-        db.refresh(new_diagram)
+        db.refresh(new_file)
 
     except Exception as e:
         db.rollback()
@@ -170,13 +186,13 @@ async def generate_usecase_diagram(
     )
 
     return DiagramGenerateResponse(
-        diagram_id=str(new_diagram.document_id),
+        diagram_id=str(new_file.id),
         title=unique_title,
         diagram_type=diagram_type,
         user_id=str(current_user.id),
         generated_at=str(generate_at),
         input_description=combined_input,
-        content_md=new_diagram.content,
+        content_md=new_file.content,
     )
 
 
@@ -191,12 +207,12 @@ async def update_usecase_diagram(
 ):
     logger.info(f"User {current_user.email} requested update for diagram {diagram_id}")
     diagram = (
-        db.query(Documents)
+        db.query(Files)
         .filter(
-            Documents.project_id == project_id,
-            Documents.document_id == diagram_id,
-            Documents.user_id == current_user.id,
-            Documents.document_type == diagram_type,
+            Files.project_id == project_id,
+            Files.id == diagram_id,
+            Files.created_by == current_user.id,
+            Files.file_type == diagram_type,
         )
         .first()
     )
@@ -207,25 +223,27 @@ async def update_usecase_diagram(
             detail="Diagram not found or you do not have permission to update it.",
         )
 
+
     diagram.content = content_md
 
-    file_name = f"/{diagram.document_type}/{diagram.document_name}.md"
+    file_name = f"/{diagram.file_type}/{diagram.name}.md"
     file_like = BytesIO(diagram.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
-    path_in_bucket = await update_file_from_supabase(diagram.file_path, upload_file)
+    path_in_bucket = await update_file_from_supabase(diagram.storage_path, upload_file)
 
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
-    diagram.file_path = path_in_bucket
+    diagram.storage_path = path_in_bucket
+    diagram.updated_by=current_user.id
 
     db.commit()
     db.refresh(diagram)
 
     return DiagramUpdateResponse(
-        diagram_id=str(diagram.document_id),
-        title=diagram.document_name,
-        diagram_type=diagram.document_type,
+        diagram_id=str(diagram.id),
+        title=diagram.name,
+        diagram_type=diagram.file_type,
         update_at=str(diagram.updated_at),
         content_md=diagram.content,
     )
@@ -253,12 +271,12 @@ async def get_diagram(
         valid_diagram_types = {"class", "usecase", "activity"}
 
         diagram = (
-            db.query(Documents)
+            db.query(Files)
             .filter(
-                Documents.project_id == project_id,
-                Documents.document_id == diagram_id,
-                Documents.user_id == current_user.id,
-                Documents.document_type.in_(valid_diagram_types),
+                Files.project_id == project_id,
+                Files.id == diagram_id,
+                Files.created_by == current_user.id,
+                Files.file_type.in_(valid_diagram_types),
             )
             .first()
         )
@@ -269,9 +287,9 @@ async def get_diagram(
             )
 
         return DiagramResponse(
-            diagram_id=str(diagram.document_id),
-            title=diagram.document_name,
-            diagram_type=diagram.document_type,
+            diagram_id=str(diagram.id),
+            title=diagram.name,
+            diagram_type=diagram.file_type,
             update_at=str(diagram.updated_at),
             content_md=diagram.content,
         )
@@ -307,13 +325,13 @@ async def list_diagram(
             )
 
         diagram_list = (
-            db.query(Documents)
+            db.query(Files)
             .filter(
-                Documents.user_id == current_user.id,
-                Documents.project_id == project_id,
-                Documents.document_type.in_(valid_diagram_types),
+                Files.created_by == current_user.id,
+                Files.project_id == project_id,
+                Files.file_type.in_(valid_diagram_types),
             )
-            .order_by(Documents.updated_at.desc())
+            .order_by(Files.updated_at.desc())
             .all()
         )
 
@@ -324,9 +342,9 @@ async def list_diagram(
         for diagram in diagram_list:
             result.append(
                 DiagramResponse(
-                    diagram_id=str(diagram.document_id),
-                    title=diagram.document_name,
-                    diagram_type=diagram.document_type,
+                    diagram_id=str(diagram.id),
+                    title=diagram.name,
+                    diagram_type=diagram.file_type,
                     update_at=str(diagram.updated_at),
                     content_md=diagram.content,
                 )
@@ -357,12 +375,12 @@ async def regenerate_srs(
     )
     valid_diagram_types = {"class", "usecase", "activity"}
     existing_diagram = (
-        db.query(Documents)
+        db.query(Files)
         .filter(
-            Documents.document_id == diagram_id,
-            Documents.project_id == project_id,
-            Documents.user_id == current_user.id,
-            Documents.document_type.in_(valid_diagram_types),
+            Files.id == diagram_id,
+            Files.project_id == project_id,
+            Files.created_by == current_user.id,
+            Files.file_type.in_(valid_diagram_types),
         )
         .first()
     )
@@ -374,38 +392,37 @@ async def regenerate_srs(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    if existing_diagram.document_type == "usecase":
+    if existing_diagram.file_type == "usecase":
         ai_service_url = settings.ai_service_url_diagram_usecase
-    elif existing_diagram.document_type == "class":
+    elif existing_diagram.file_type == "class":
         ai_service_url = settings.ai_service_url_diagram_class
-    elif existing_diagram.document_type == "activity":
+    elif existing_diagram.file_type == "activity":
         ai_service_url = settings.ai_service_url_diagram_activity
 
     ai_payload = {"message": description, "content_id": diagram_id}
     ai_data = await call_ai_service(ai_service_url, ai_payload)
 
     existing_diagram.content = ai_data["response"]["detail"]
-    existing_diagram.version += 1
 
-    file_name = f"/{existing_diagram.document_type}/{existing_diagram.document_name}.md"
+    file_name = f"/{existing_diagram.file_type}/{existing_diagram.name}.md"
     file_like = BytesIO(existing_diagram.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
-        existing_diagram.file_path, upload_file
+        existing_diagram.storage_path, upload_file
     )
 
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
-    existing_diagram.file_path = path_in_bucket
+    existing_diagram.storage_path = path_in_bucket
+    existing_diagram.updated_by=current_user.id
 
     try:
 
         generate_at = datetime.now(timezone.utc)
 
         new_ai_session = Chat_Session(
-            session_id=existing_diagram.version,
-            content_id=existing_diagram.document_id,
+            content_id=existing_diagram.id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -414,8 +431,7 @@ async def regenerate_srs(
         )
 
         new_user_session = Chat_Session(
-            session_id=existing_diagram.version,
-            content_id=existing_diagram.document_id,
+            content_id=existing_diagram.id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="diagram",
@@ -428,9 +444,9 @@ async def regenerate_srs(
         db.refresh(existing_diagram)
 
         return DiagramResponse(
-            diagram_id=str(existing_diagram.document_id),
-            title=existing_diagram.document_name,
-            diagram_type=existing_diagram.document_type,
+            diagram_id=str(existing_diagram.id),
+            title=existing_diagram.name,
+            diagram_type=existing_diagram.file_type,
             update_at=str(existing_diagram.updated_at),
             content_md=existing_diagram.content,
         )

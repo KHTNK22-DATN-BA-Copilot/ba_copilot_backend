@@ -1,12 +1,9 @@
-from sys import prefix
 from fastapi import FastAPI, HTTPException
 from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload,one_click,folder
 from app.core.database import engine, Base
 import logging
 import time
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.models import project_raw_file
 
 
 # Configure logging
