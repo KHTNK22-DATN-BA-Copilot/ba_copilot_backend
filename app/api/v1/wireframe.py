@@ -8,16 +8,15 @@ from fastapi import (
     HTTPException,
     status,
     UploadFile,
-    File,
     Form,
 )
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List, Optional, Tuple
-import json
+from typing import Optional, Tuple
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models.document import Documents
+from app.models.file import Files
+from app.models.file import Files
 from app.models.user import User
 from app.models.session import Chat_Session
 from app.core.config import settings
@@ -26,6 +25,8 @@ from app.schemas.wireframe import GetWireframeResponse
 from app.utils.call_ai_service import call_ai_service
 from app.utils.file_handling import update_file_from_supabase, upload_to_supabase
 from app.utils.get_unique_name import get_unique_diagram_name
+from app.utils.folder_utils import create_default_folder
+from app.schemas.folder import CreateFolderRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -97,7 +98,17 @@ async def generate_wireframe(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-  
+
+    new_folder=CreateFolderRequest(
+        name="Wireframe",
+    )
+    result = await create_default_folder(project_id, new_folder, current_user.id, db)
+
+    if result.error:
+        raise HTTPException(status_code=500, detail="Failed to create wireframe folder to storage")
+
+    folder=result.folder
+
     combined_input = f"""
         Project Description:
         This project involves creating a wireframe for a {device_type} device.
@@ -132,7 +143,7 @@ async def generate_wireframe(
         )
 
     ai_content = ai_data.get("response", {}).get("content", "")
-    file_name = f"/wireframe/{unique_title}.md"
+    file_name = f"/{folder.name}/{unique_title}.md"
     file_like = BytesIO(ai_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -140,48 +151,50 @@ async def generate_wireframe(
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
     html_content, css_content = extract_html_css_from_content(ai_content)
+
     try:
-        new_doc = Documents(
+        new_file = Files(
             project_id=project_id,
-            user_id=current_user.id,
-            document_name=unique_title,
-            document_type="wireframe",
+            folder_id=folder.id,
+            created_by=current_user.id,
+            updated_by=current_user.id,
+            name=unique_title,
+            extension=".md",
+            storage_path=path_in_bucket,
             content=ai_content,
-            file_name=unique_title,
-            file_path=path_in_bucket,
-            document_metadata={
+            file_category="ai gen",
+            file_type="wireframe",
+            metadata={
                 "message": description,
                 "ai_response": ai_data,
             },
         )
-        db.add(new_doc)
+        db.add(new_file)
         db.flush()  # get generated diagram_id + version without commit
 
         # Create chat sessions
 
         new_user_session = Chat_Session(
-            session_id=new_doc.version,
-            content_id=new_doc.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="wireframe",
+            content_id=new_file.id,
             role="user",
             message=combined_input,
         )
 
         new_ai_session = Chat_Session(
-            session_id=new_doc.version,
-            content_id=new_doc.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="wireframe",
+            content_id=new_file.id,
             role="ai",
-            message=json.dumps(ai_data["response"]),
+            message=combined_input,
         )
 
         db.add_all([new_ai_session, new_user_session])
         db.commit()
-        db.refresh(new_doc)
+        db.refresh(new_file)
     except Exception as e:
         db.rollback()
         logger.error(f"Transaction failed: {e}")
@@ -195,7 +208,7 @@ async def generate_wireframe(
     )
 
     return WireframeGenerateResponse(
-        wireframe_id=str(new_doc.document_id),
+        wireframe_id=str(new_file.document_id),
         user_id=str(current_user.id),
         generated_at=str(generate_at),
         input_description=combined_input,
@@ -210,13 +223,13 @@ async def list_wireframes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document_type = "wireframe"
+    file_type = "wireframe"
     wireframes = (
-        db.query(Documents)
+        db.query(Files)
         .filter(
-            Documents.project_id == project_id,
-            Documents.user_id == current_user.id,
-            Documents.document_type == document_type,
+            Files.project_id == project_id,
+            Files.created_by == current_user.id,
+            Files.file_type == file_type,
         )
         .all()
     )
@@ -225,10 +238,10 @@ async def list_wireframes(
         html_content, css_content = extract_html_css_from_content(wireframe.content)
         result.append(
             GetWireframeResponse(
-                wireframe_id=str(wireframe.document_id),
+                wireframe_id=str(wireframe.id),
                 project_id=wireframe.project_id,
-                user_id=wireframe.user_id,
-                title=wireframe.document_name,
+                user_id=wireframe.created_by,
+                title=wireframe.name,
                 html_content=html_content,
                 css_content=css_content,
                 created_at=wireframe.created_at,
@@ -245,14 +258,14 @@ async def get_wireframe(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document_type = "wireframe"
+    file_type = "wireframe"
     wireframe = (
-        db.query(Documents)
+        db.query(Files)
         .filter(
-            Documents.document_id == wireframe_id,
-            Documents.project_id == project_id,
-            Documents.user_id == current_user.id,
-            Documents.document_type == document_type,
+            Files.id == wireframe_id,
+            Files.project_id == project_id,
+            Files.created_by == current_user.id,
+            Files.file_type == file_type,
         )
         .first()
     )
@@ -264,10 +277,10 @@ async def get_wireframe(
 
     html_content, css_content = extract_html_css_from_content(wireframe.content)
     return GetWireframeResponse(
-        wireframe_id=str(wireframe.document_id),
+        wireframe_id=str(wireframe.id),
         project_id=wireframe.project_id,
-        user_id=wireframe.user_id,
-        title=wireframe.document_name,
+        user_id=wireframe.created_by,
+        title=wireframe.name,
         html_content=html_content,
         css_content=css_content,
         created_at=wireframe.created_at,
@@ -289,21 +302,21 @@ async def regenerate_srs(
         f"User {current_user.email} requested SRS regeneration for {wireframe_id}"
     )
 
-    document_type = "wireframe"
+    file_type = "wireframe"
     existing_wireframe = (
-        db.query(Documents)
+        db.query(Files)
         .filter(
-            Documents.document_id == wireframe_id,
-            Documents.project_id == project_id,
-            Documents.user_id==current_user.id,
-            Documents.document_type == document_type,
+            Files.id == wireframe_id,
+            Files.project_id == project_id,
+            Files.created_by == current_user.id,
+            Files.file_type == file_type,
         )
         .first()
     )
     if not existing_wireframe:
         raise HTTPException(status_code=404, detail="Wireframe not found")
 
-    if current_user.id != existing_wireframe.user_id:
+    if current_user.id != existing_wireframe.created_by:
         raise HTTPException(
             status_code=403, detail="You don't have permission to access this document."
         )
@@ -325,42 +338,40 @@ async def regenerate_srs(
     ai_content = ai_data.get("response", {}).get("content", "")
     html_content, css_content = extract_html_css_from_content(ai_content)
     existing_wireframe.content = ai_content
-    existing_wireframe.version += 1
 
-    file_name = f"/wireframe/{existing_wireframe.document_name}.md"
+    file_name = f"/wireframe/{existing_wireframe.name}.md"
     file_like = BytesIO(existing_wireframe.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
-        existing_wireframe.file_path, upload_file
+        existing_wireframe.storage_path, upload_file
     )
 
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
-    existing_wireframe.file_path = path_in_bucket
+    existing_wireframe.storage_path = path_in_bucket
+    existing_wireframe.updated_by=current_user.id
 
     try:
 
         generate_at = datetime.now(timezone.utc)
 
         new_user_session = Chat_Session(
-            session_id=existing_wireframe.version,
-            content_id=existing_wireframe.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="wireframe",
+            content_id=existing_wireframe.id,
             role="user",
             message=description,
         )
 
         new_ai_session = Chat_Session(
-            session_id=existing_wireframe.version,
-            content_id=existing_wireframe.document_id,
             project_id=project_id,
             user_id=current_user.id,
             content_type="wireframe",
+            content_id=existing_wireframe.id,
             role="ai",
-            message=json.dumps(ai_data["response"]),
+            message=description,
         )
 
         db.add_all([new_ai_session, new_user_session])
@@ -368,10 +379,10 @@ async def regenerate_srs(
         db.refresh(existing_wireframe)
 
         return GetWireframeResponse(
-            wireframe_id=str(existing_wireframe.document_id),
+            wireframe_id=str(existing_wireframe.id),
             project_id=existing_wireframe.project_id,
-            user_id=existing_wireframe.user_id,
-            title=existing_wireframe.document_name,
+            user_id=existing_wireframe.created_by,
+            title=existing_wireframe.name,
             html_content=html_content,
             css_content=css_content,
             created_at=existing_wireframe.created_at,

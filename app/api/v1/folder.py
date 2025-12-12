@@ -1,4 +1,4 @@
-from app.models.file import File
+from app.models.file import Files
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from app.api.v1.auth import get_current_user
@@ -142,8 +142,8 @@ async def get_folder_children(
     )
 
     files = (
-        db.query(File)
-        .filter(File.folder_id == folder_id, File.status != "deleted")
+        db.query(Files)
+        .filter(Files.folder_id == folder_id, Files.status != "deleted")
         .all()
     )
 

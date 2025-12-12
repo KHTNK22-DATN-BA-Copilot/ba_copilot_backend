@@ -1,4 +1,4 @@
-from app.models.file import File
+from app.models.file import Files
 from app.schemas.file import GetFileResponse
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import asc, desc
@@ -258,11 +258,11 @@ async def get_root_contents(
     )
     # Get direct files
     files = (
-        db.query(File)
+        db.query(Files)
         .filter(
-            File.project_id == project_id,
-            File.folder_id.is_(None),
-            File.status != "deleted",
+            Files.project_id == project_id,
+            Files.folder_id.is_(None),
+            Files.status != "deleted",
         )
         .all()
     )
@@ -328,8 +328,8 @@ async def get_project_tree(
         .all()
     )
     files = (
-        db.query(File)
-        .filter(File.project_id == project_id, File.status != "deleted")
+        db.query(Files)
+        .filter(Files.project_id == project_id, Files.status != "deleted")
         .all()
     )
 
