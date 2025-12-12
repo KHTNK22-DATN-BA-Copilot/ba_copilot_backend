@@ -1,8 +1,7 @@
 import re
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.document import Documents
+from app.models.file import Files
 
 
 def get_unique_diagram_name(
@@ -12,11 +11,11 @@ def get_unique_diagram_name(
     base_title = title.strip()
 
     existing_documents = (
-        db.query(Documents.document_name)
+        db.query(Files.name)
         .filter(
-            Documents.project_id == project_id,
-            Documents.document_type == diagram_type,
-            Documents.document_name.like(f"{base_title}%"),
+            Files.project_id == project_id,
+            Files.file_type == diagram_type,
+            Files.name.like(f"{base_title}%"),
         )
         .all()
     )
@@ -43,10 +42,8 @@ def get_unique_diagram_name(
             if suffix > max_suffix:
                 max_suffix = suffix
 
-    # 3. Trả về tên duy nhất
     if not existing_documents or not (is_exact_match or max_suffix > 0):
-        # Không tìm thấy tên trùng hoặc hậu tố, trả về tên gốc
+       
         return base_title
     else:
-        # Tìm thấy tên trùng, sử dụng số hậu tố lớn nhất + 1
         return f"{base_title} ({max_suffix + 1})"
