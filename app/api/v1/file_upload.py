@@ -24,12 +24,22 @@ async def list_file(
 ):
     file_list = (
         db.query(Files)
-        .filter(Files.project_id == project_id, Files.created_by == current_user.id)
+        .filter(
+            Files.project_id == project_id,
+            Files.created_by == current_user.id,
+        )
         .order_by(Files.created_at.asc())
         .all()
     )
 
-    return [file.storage_path for file in file_list]
+    return [
+        (
+            file.storage_md_path
+            if file.file_category == "user upload"
+            else file.storage_path
+        )
+        for file in file_list
+    ]
 
 
 @router.post("/upload/{project_id}/{folder_id}", status_code=200)
