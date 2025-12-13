@@ -27,7 +27,7 @@ from app.utils.file_handling import update_file_from_supabase, upload_to_supabas
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.folder_utils import create_default_folder
 from app.schemas.folder import CreateFolderRequest
-from file_upload import list_file
+from app.api.v1.file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
