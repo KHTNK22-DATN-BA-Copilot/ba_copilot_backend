@@ -19,5 +19,5 @@ class GetFileResponse(BaseModel):
     status: str = Field(..., description="File status (active, etc.)")
     created_at: datetime = Field(..., description="Timestamp when the file was created")
     updated_at: datetime = Field(..., description="Timestamp when the file was last updated")
-    
+
 
