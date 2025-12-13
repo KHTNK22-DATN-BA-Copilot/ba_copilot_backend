@@ -36,6 +36,7 @@ from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.schemas.folder import CreateFolderRequest
+from file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,9 +94,9 @@ async def generate_usecase_diagram(
         - General Description: {description}
     """
 
-    ai_payload = {
-        "message": combined_input,
-    }
+    file_urls = await list_file(project_id, db, current_user)
+
+    ai_payload = {"message": combined_input, "storage_paths": file_urls}
 
     if diagram_type == "usecase":
         ai_service_url = settings.ai_service_url_diagram_usecase
@@ -396,7 +397,12 @@ async def regenerate_srs(
     elif existing_diagram.file_type == "activity":
         ai_service_url = settings.ai_service_url_diagram_activity
 
-    ai_payload = {"message": description, "content_id": diagram_id}
+    file_urls = await list_file(project_id, db, current_user)
+    ai_payload = {
+        "message": description,
+        "content_id": diagram_id,
+        "storage_paths": file_urls,
+    }
     ai_data = await call_ai_service(ai_service_url, ai_payload)
 
     existing_diagram.content = ai_data["response"]["detail"]

@@ -27,6 +27,7 @@ from app.utils.file_handling import update_file_from_supabase, upload_to_supabas
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.folder_utils import create_default_folder
 from app.schemas.folder import CreateFolderRequest
+from file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -124,9 +125,8 @@ async def generate_wireframe(
         f"Original title: '{wireframe_name}', Unique title chosen: '{unique_title}'"
     )
 
-    ai_payload = {
-        "message": combined_input,
-    }
+    file_urls=await list_file(project_id,db,current_user)
+    ai_payload = {"message": combined_input, "storage_paths": file_urls}
 
     # Call AI service
     generate_at = datetime.now(timezone.utc)
@@ -321,7 +321,13 @@ async def regenerate_srs(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    ai_payload = {"message": description, "content_id": wireframe_id}
+    file_urls=await list_file(project_id,db,current_user)
+
+    ai_payload = {
+        "message": description,
+        "content_id": wireframe_id,
+        "storage_paths": file_urls
+    }
 
     try:
         ai_data = await call_ai_service(settings.ai_service_url_wireframe, ai_payload)

@@ -39,7 +39,7 @@ from app.utils.srs_utils import (
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
-
+from file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -72,11 +72,15 @@ async def generate_srs(
 
     unique_title = get_unique_diagram_name(db, project_name, project_id, "srs")
 
+
     logger.info(
         f"Original title: '{project_name}', Unique title chosen: '{unique_title}'"
     )
+
+    file_urls=await list_file(project_id,db,current_user)
     ai_payload = {
         "message": description,
+        "storage_paths":file_urls
     }
 
     # Gọi AI service
@@ -371,8 +375,12 @@ async def regenerate_srs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Folder store SRS not found or you do not have permission to update it.",
         )
-
-    ai_payload = {"message": description, "content_id": document_id}
+    file_urls = await list_file(project_id, db, current_user)
+    ai_payload = {
+        "message": description,
+        "content_id": document_id,
+        "storage_paths": file_urls
+    }
     ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
     markdown_content = format_srs_to_markdown(ai_data["response"])
 
