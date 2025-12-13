@@ -39,7 +39,7 @@ from app.utils.srs_utils import (
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
-from file_upload import list_file
+from app.api.v1.file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -36,7 +36,7 @@ from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.schemas.folder import CreateFolderRequest
-from file_upload import list_file
+from app.api.v1.file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
