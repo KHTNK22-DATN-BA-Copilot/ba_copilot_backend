@@ -1,5 +1,18 @@
 from fastapi import FastAPI, HTTPException
-from app.api.v1 import auth, user,wireframe,srs, project_router,diagram,session,file_upload,one_click,folder, stakeholder_register
+from app.api.v1 import (
+    auth,
+    user,
+    wireframe,
+    srs,
+    project_router,
+    diagram,
+    session,
+    file_upload,
+    one_click,
+    folder,
+    stakeholder_register,
+    high_level_requirements,
+)
 from app.core.database import engine, Base
 import logging
 import time
@@ -16,16 +29,25 @@ app = FastAPI(title="BaCopilot Authentication API", version="1.0.0")
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 app.include_router(srs.router, prefix="/api/v1/srs", tags=["srs_generator"])
-app.include_router(wireframe.router, prefix="/api/v1/wireframe", tags=["wireframe_generator"])
 app.include_router(
-    diagram.router, prefix="/api/v1/diagram", tags=["diagram_generator"]
+    wireframe.router, prefix="/api/v1/wireframe", tags=["wireframe_generator"]
 )
+app.include_router(diagram.router, prefix="/api/v1/diagram", tags=["diagram_generator"])
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
 app.include_router(file_upload.router, prefix="/api/v1/files", tags=["file"])
-app.include_router(session.router, prefix="/api/v1/sessions",tags=["chat history"])
+app.include_router(session.router, prefix="/api/v1/sessions", tags=["chat history"])
 app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
-app.include_router(stakeholder_register.router,prefix="/api/v1/stakeholders",tags=["stalkholder"])
-app.include_router(one_click.router, prefix="/api/v1/one-click",tags=["one click flow"])
+app.include_router(
+    stakeholder_register.router, prefix="/api/v1/stakeholders", tags=["stalkholder"]
+)
+app.include_router(
+    high_level_requirements.router,
+    prefix="/api/v1/high-level-requirements",
+    tags=["high level requirements"],
+)
+app.include_router(
+    one_click.router, prefix="/api/v1/one-click", tags=["one click flow"]
+)
 
 
 # Configure CORS
@@ -52,7 +74,9 @@ async def startup_event():
             break
         except Exception as e:
             retry_count += 1
-            logger.warning(f"Database connection attempt {retry_count} failed: {str(e)}")
+            logger.warning(
+                f"Database connection attempt {retry_count} failed: {str(e)}"
+            )
             if retry_count >= max_retries:
                 logger.error("Max retries reached. Could not connect to database.")
                 raise e
@@ -69,6 +93,7 @@ def health_check():
     try:
         # Check database connection
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return {"status": "healthy", "database": "connected"}

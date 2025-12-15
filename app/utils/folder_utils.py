@@ -1,6 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from app.schemas.folder import CreateFolderRequest, CreateFolderResult,CreateFolderResponse
+
+from app.schemas.folder import (
+    CreateFolderRequest,
+    CreateFolderResult,
+    CreateFolderResponse,
+)
 from app.models.project import Project
 from app.models.folder import Folder
 
@@ -23,9 +28,7 @@ async def create_default_folder(
         )
 
         if not project:
-            return CreateFolderResult(
-                error="Project not found"
-            )
+            return CreateFolderResult(error="Project not found")
 
         filters = [
             Folder.project_id == project_id,
@@ -40,8 +43,11 @@ async def create_default_folder(
 
         existing = db.query(Folder).filter(*filters).first()
 
+
         if existing:
-            return CreateFolderResponse.model_validate(existing)
+            return CreateFolderResult(
+                folder=CreateFolderResponse.model_validate(existing)
+            )
 
         new_folder = Folder(
             project_id=project_id,
@@ -62,12 +68,12 @@ async def create_default_folder(
         db.rollback()
         return CreateFolderResult(
             error="Database error",
-            detail=str(e)
+            detail=str(e),
         )
 
     except Exception as e:
         db.rollback()
         return CreateFolderResult(
-            error="Unknown error", 
-            detail=str(e)
+            error="Unknown error",
+            detail=str(e),
         )
