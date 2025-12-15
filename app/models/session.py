@@ -41,8 +41,4 @@ class Chat_Session(Base):
 
     __table_args__ = (
         CheckConstraint("role IN ('user','ai')", name="role_check"),
-        CheckConstraint(
-            "content_type IN ('srs', 'wireframe', 'diagram', 'conversation')",
-            name="content_type_check",
-        ),
     )

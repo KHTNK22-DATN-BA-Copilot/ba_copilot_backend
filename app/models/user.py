@@ -21,4 +21,4 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-   
+    tokens = relationship("Token", back_populates="user", cascade="all, delete-orphan")
