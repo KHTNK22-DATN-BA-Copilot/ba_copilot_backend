@@ -40,5 +40,6 @@ class Settings(BaseSettings):
     ai_service_url_diagram_class: str
     ai_service_url_diagram_activity: str
     ai_service_url_stakeholder:str
+    ai_service_url_high_level_requirements: str
 
 settings = Settings()
