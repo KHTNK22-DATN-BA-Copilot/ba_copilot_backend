@@ -12,6 +12,7 @@ from app.api.v1 import (
     folder,
     stakeholder_register,
     high_level_requirements,
+    requirements_management_plan,
 )
 from app.core.database import engine, Base
 import logging
@@ -44,6 +45,11 @@ app.include_router(
     high_level_requirements.router,
     prefix="/api/v1/high-level-requirements",
     tags=["high level requirements"],
+)
+app.include_router(
+    requirements_management_plan.router,
+    prefix="/api/v1/requirements-mngt-plan",
+    tags=["requirements management plan"],
 )
 app.include_router(
     one_click.router, prefix="/api/v1/one-click", tags=["one click flow"]
