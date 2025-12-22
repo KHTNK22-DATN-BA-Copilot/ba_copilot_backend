@@ -10,9 +10,6 @@ from app.api.v1 import (
     file_upload,
     one_click,
     folder,
-    stakeholder_register,
-    high_level_requirements,
-    requirements_management_plan,
     design,
     planning
 )
@@ -40,19 +37,6 @@ app.include_router(project_router.router, prefix="/api/v1/projects", tags=["proj
 app.include_router(file_upload.router, prefix="/api/v1/files", tags=["file"])
 app.include_router(session.router, prefix="/api/v1/sessions", tags=["chat history"])
 app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
-# app.include_router(
-#     stakeholder_register.router, prefix="/api/v1/stakeholders", tags=["stalkholder"]
-# )
-# app.include_router(
-#     high_level_requirements.router,
-#     prefix="/api/v1/high-level-requirements",
-#     tags=["high level requirements"],
-# )
-# app.include_router(
-#     requirements_management_plan.router,
-#     prefix="/api/v1/requirements-mngt-plan",
-#     tags=["requirements management plan"],
-# )
 
 app.include_router(design.router,prefix="/api/v1/design",tags=["design step"])
 app.include_router(planning.router,prefix="/api/v1/planning",tags=["planning step"])
