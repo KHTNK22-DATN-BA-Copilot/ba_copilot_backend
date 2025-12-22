@@ -3,8 +3,8 @@ from typing import Annotated, Dict, Any, Optional, List
 from datetime import datetime
 
 
-class HLRGenerateResponse(BaseModel):
-    """Response schema for High-Level Requirements generation."""
+class DesignGenerateResponse(BaseModel):
+    """Unified response schema for Design generation."""
 
     document_id: str = Field(
         ..., description="Unique identifier for the generated document"
@@ -16,13 +16,21 @@ class HLRGenerateResponse(BaseModel):
     input_description: str = Field(
         ..., description="Original input used for generation"
     )
-    document: str = Field(
-        ..., description="Generated High-Level Requirements document in Markdown format"
-    )
+    document: str = Field(..., description="Generated content (Markdown/Mermaid) code")
+    design_type: str = Field(..., description="Type of design (e.g., hld-arch, lld-db)")
     status: str = Field(..., description="Generation status")
 
 
-class GetHLRResponse(BaseModel):
+class GetDesignResponse(BaseModel):
+    document_id: str
+    project_name: str
+    content: str
+    design_type: str
+    status: str
+    updated_at: datetime
+
+
+class UpdateDesignResponse(BaseModel):
     document_id: str
     project_name: str
     content: str
@@ -30,21 +38,13 @@ class GetHLRResponse(BaseModel):
     updated_at: datetime
 
 
-class UpdateHLRResponse(BaseModel):
-    document_id: str
-    project_name: str
-    content: str
-    status: str
-    updated_at: datetime
+class DesignListResponse(BaseModel):
+    documents: List[GetDesignResponse] = Field(
+        ..., description="List of design documents"
+    )
 
 
-class HLRListResponse(BaseModel):
-    documents: List[GetHLRResponse] = Field(..., description="List of HLR documents")
-
-
-class HLRDocument(BaseModel):
-    """High-Level Requirements document model."""
-
+class DesignDocument(BaseModel):
     document_id: str
     project_name: str
     content: str
