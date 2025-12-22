@@ -38,9 +38,23 @@ class Settings(BaseSettings):
     ai_service_url_diagram_usecase: str
     ai_service_url_diagram_class: str
     ai_service_url_diagram_activity: str
-    ai_service_url_stakeholder: str
+    ai_service_url_stakeholder_register: str
     ai_service_url_high_level_requirements: str
     ai_service_url_requirements_management_plan: str
+    ai_service_url_business_case: str
+    ai_service_url_scope_statement: str
+    ai_service_url_product_roadmap: str
 
+    ai_service_url_hld_arch: str
+    ai_service_url_hld_cloud: str
+    ai_service_url_hld_tech: str
 
+    ai_service_url_lld_arch: str
+    ai_service_url_lld_db: str
+    ai_service_url_lld_api: str
+    ai_service_url_lld_pseudo: str
+
+    ai_service_url_uiux_wireframe: str
+    ai_service_url_uiux_mockup: str
+    ai_service_url_uiux_prototype: str
 settings = Settings()

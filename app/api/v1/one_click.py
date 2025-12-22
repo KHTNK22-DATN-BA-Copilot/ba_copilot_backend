@@ -1,139 +1,288 @@
-from fastapi import WebSocket, APIRouter, Depends, status
+import asyncio
+import logging
+from fastapi import (
+    WebSocket,
+    APIRouter,
+    Depends,
+    status,
+    WebSocketDisconnect,
+    HTTPException,
+)
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.user import User
 from app.core.security import verify_token
 
-from app.api.v1.srs import generate_srs
-from app.api.v1.wireframe import generate_wireframe
-from app.api.v1.diagram import generate_usecase_diagram
+from app.api.v1.planning import generate_planning_doc
+from app.api.v1.design import generate_design
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.websocket("/one-click/{project_id}")
-async def websocket_one_click(
+# =========================
+# WEBSOCKET ENDPOINT
+# =========================
+@router.websocket("/ws/generate/{project_id}")
+async def websocket_generate_step(
     websocket: WebSocket,
     project_id: int,
     db: Session = Depends(get_db),
 ):
-    await websocket.accept()
-
-    # =============================
-    # 1. Lấy token từ query param
-    # =============================
-
+    # --------------------------------------------------
+    # 1. AUTH
+    # --------------------------------------------------
     token = websocket.query_params.get("token")
-
     if not token:
-        await websocket.send_json({"error": "Missing token"})
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-
-    # =============================
-    # 2. Verify token (như HTTP)
-    # =============================
 
     payload, error = verify_token(token)
-
-    if error == "expired":
-        await websocket.send_json({"error": "Token expired"})
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    if error == "invalid":
-        await websocket.send_json({"error": "Invalid token"})
+    if error:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     email = payload.get("sub")
-    if not email:
-        await websocket.send_json({"error": "Invalid token payload"})
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    # =============================
-    # 3. Get user từ DB
-    # =============================
-
     current_user = db.query(User).filter(User.email == email).first()
-
     if not current_user:
-        await websocket.send_json({"error": "User not found"})
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # =============================
-    # 4. Main process steps
-    # =============================
+    await websocket.accept()
+    logger.info(f"WS Connected | project_id={project_id} | user={email}")
 
-    steps = ["srs", "wireframe", "diagram"]
-    description = "Auto generate description"
-    project_name = "Auto Gen Project"
+    # --------------------------------------------------
+    # 2. RUNTIME STATE
+    # --------------------------------------------------
+    continue_event = asyncio.Event()
+    stop_event = asyncio.Event()
+    orchestrator_task: asyncio.Task | None = None
 
-    for step in steps:
+    context = {
+        "project_name": "",
+        "description": "",
+        "steps": [],
+    }
+
+    # --------------------------------------------------
+    # 3. PROCESS SINGLE DOCUMENT
+    # --------------------------------------------------
+    async def process_single_doc(
+        step: str,
+        project_name: str,
+        description: str,
+        doc_type: str,
+    ):
         try:
-            if step == "srs":
-                res = await generate_srs(
+            await websocket.send_json(
+                {
+                    "type": "doc_start",
+                    "step": step,
+                    "doc_type": doc_type,
+                }
+            )
+
+            # ----- CALL SERVICE -----
+            if step == "planning":
+                result = await generate_planning_doc(
                     project_id=project_id,
                     project_name=project_name,
+                    doc_type=doc_type,
                     description=description,
                     db=db,
                     current_user=current_user,
                 )
 
-            elif step == "wireframe":
-                res = await generate_wireframe(
+            elif step == "design":
+                result = await generate_design(
                     project_id=project_id,
-                    device_type="mobile",
-                    wireframe_name="Auto Wireframe",
+                    project_name=project_name,
+                    design_type=doc_type,
                     description=description,
                     db=db,
                     current_user=current_user,
                 )
 
-            elif step == "diagram":
-                res = await generate_usecase_diagram(
-                    project_id=project_id,
-                    diagram_type="usecase",
-                    title="Auto Diagram",
-                    description=description,
-                    db=db,
-                    current_user=current_user,
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported step: {step}",
                 )
 
-        except Exception as e:
+            res = result.model_dump() if hasattr(result, "model_dump") else result
+
             await websocket.send_json(
-                {"error": f"{step} generation failed", "detail": str(e)}
+                {
+                    "type": "doc_completed",
+                    "step": step,
+                    "doc_type": doc_type,
+                    "data": res,
+                }
             )
-            await websocket.close()
-            return
 
-        # thông báo cho FE biết step đã xong
+        except HTTPException as e:
+            await websocket.send_json(
+                {
+                    "type": "doc_error",
+                    "step": step,
+                    "doc_type": doc_type,
+                    "status_code": e.status_code,
+                    "message": e.detail,
+                }
+            )
+
+        except asyncio.CancelledError:
+            raise
+
+        except Exception:
+            logger.exception("Unexpected error")
+            await websocket.send_json(
+                {
+                    "type": "doc_error",
+                    "step": step,
+                    "doc_type": doc_type,
+                    "message": "Internal server error",
+                }
+            )
+
+    # --------------------------------------------------
+    # 4. STEP ORCHESTRATOR (RUN BACKGROUND)
+    # --------------------------------------------------
+    async def run_steps():
+        for step_cfg in context["steps"]:
+            if stop_event.is_set():
+                return
+
+            step_name = step_cfg.get("name")
+            documents = step_cfg.get("documents", [])
+
+            if not step_name or not documents:
+                await websocket.send_json(
+                    {
+                        "type": "step_error",
+                        "step": step_name,
+                        "message": "Invalid step configuration",
+                    }
+                )
+                return
+
+            await websocket.send_json(
+                {
+                    "type": "step_start",
+                    "step": step_name,
+                }
+            )
+
+            tasks = [
+                asyncio.create_task(
+                    process_single_doc(
+                        step=step_name,
+                        project_name=context["project_name"],
+                        description=context["description"],
+                        doc_type=doc["type"],
+                    )
+                )
+                for doc in documents
+            ]
+
+            try:
+                await asyncio.gather(*tasks)
+            except asyncio.CancelledError:
+                for t in tasks:
+                    t.cancel()
+                raise
+
+            await websocket.send_json(
+                {
+                    "type": "step_finished",
+                    "step": step_name,
+                    "message": f"Finished step {step_name}",
+                }
+            )
+
+            # ⏸ WAIT USER DECISION
+            continue_event.clear()
+            await websocket.send_json(
+                {
+                    "type": "await_decision",
+                    "step": step_name,
+                    "message": "Continue to next step?",
+                }
+            )
+
+            await continue_event.wait()
+
         await websocket.send_json(
             {
-                "step": step,
-                "status": "success",
-                "message": f"{step.upper()} generated successfully",
-                "res": res.model_dump(),
+                "type": "finished",
+                "message": "All steps completed",
             }
         )
 
-        # hỏi người dùng có muốn tiếp tục
-        await websocket.send_json({"action": "confirm_continue"})
+    # --------------------------------------------------
+    # 5. WEBSOCKET MESSAGE LOOP
+    # --------------------------------------------------
+    try:
+        while True:
+            data = await websocket.receive_json()
+            action = data.get("action")
 
-        reply = await websocket.receive_text()
+            # ---------- ONE CLICK ----------
+            if action == "one_click":
+                context = {
+                    "project_name": data["project_name"],
+                    "description": data.get("description", ""),
+                    "steps": data.get("steps", []),
+                }
 
-        if reply.lower().strip() != "yes":
-            await websocket.send_json({"status": "stopped_by_user"})
-            await websocket.close()
-            return
+                if not context["steps"]:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "No steps provided from FE",
+                        }
+                    )
+                    continue
 
-    # =============================
-    # 5. Xong tất cả steps
-    # =============================
+                stop_event.clear()
+                continue_event.clear()
 
-    await websocket.send_json({"status": "completed"})
-    await websocket.close()
+                orchestrator_task = asyncio.create_task(run_steps())
+
+            # ---------- CONTINUE ----------
+            elif action == "continue":
+                continue_event.set()
+
+            # ---------- STOP ----------
+            elif action == "stop":
+                stop_event.set()
+                if orchestrator_task:
+                    orchestrator_task.cancel()
+
+                await websocket.send_json(
+                    {
+                        "type": "stopped",
+                        "message": "Process stopped by user",
+                    }
+                )
+
+            # ---------- DISCONNECT ----------
+            elif action == "disconnect":
+                stop_event.set()
+                if orchestrator_task:
+                    orchestrator_task.cancel()
+                await websocket.close()
+                return
+
+    except WebSocketDisconnect:
+        stop_event.set()
+        if orchestrator_task:
+            orchestrator_task.cancel()
+        logger.info("WS disconnected")
+
+    except Exception:
+        logger.exception("WS fatal error")
+        if orchestrator_task:
+            orchestrator_task.cancel()
+        await websocket.close(code=status.WS_1011_INTERNAL_ERROR)

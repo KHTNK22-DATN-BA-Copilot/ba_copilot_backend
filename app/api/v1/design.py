@@ -1,5 +1,9 @@
 import logging
-from uuid import UUID
+import json
+from io import BytesIO
+from datetime import datetime, timezone
+from typing import List, Optional
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -7,13 +11,10 @@ from fastapi import (
     status,
     UploadFile,
     Form,
+    Query,
 )
 from fastapi.responses import StreamingResponse
-from io import BytesIO
-from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from typing import List, Optional
-import json
 
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
@@ -22,12 +23,11 @@ from app.models.file import Files
 from app.models.folder import Folder
 from app.models.session import Chat_Session
 
-# Import Schema
-from app.schemas.requirements_management_plan import (
-    RMPGenerateResponse,
-    GetRMPResponse,
-    RMPListResponse,
-    UpdateRMPResponse,
+from app.schemas.design import (
+    DesignGenerateResponse,
+    GetDesignResponse,
+    DesignListResponse,
+    UpdateDesignResponse,
 )
 from app.schemas.folder import CreateFolderRequest
 from app.core.config import settings
@@ -43,54 +43,90 @@ from app.api.v1.file_upload import list_file
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Danh sách các design_type hợp lệ
+VALID_DESIGN_TYPES = [
+    "hld-arch",
+    "hld-cloud",
+    "hld-tech",
+    "lld-arch",
+    "lld-db",
+    "lld-api",
+    "lld-pseudo",
+    "uiux-wireframe",
+    "uiux-mockup",
+    "uiux-prototype",
+]
 
-def format_rmp_response(ai_response_data):
+
+def get_ai_endpoint(design_type: str) -> str:
+    config_name = f"ai_service_url_{design_type.replace('-', '_')}"
+
+    try:
+        url = getattr(settings, config_name)
+        return url
+    except AttributeError:
+        logger.error(f"Missing configuration for {config_name} in settings")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Server configuration error: Missing URL for {design_type}",
+        )
+
+
+def format_design_response(ai_response_data):
+    """
+    Extracts content based on AI response structure.
+    """
     if isinstance(ai_response_data, dict):
-        return ai_response_data.get("content", "")
+        if "detail" in ai_response_data:
+            return ai_response_data["detail"]
+        if "content" in ai_response_data:
+            return ai_response_data["content"]
+        return json.dumps(ai_response_data, indent=2)
     return str(ai_response_data)
 
 
-@router.post("/generate", response_model=RMPGenerateResponse)
-async def generate_requirements_management_plan(
+@router.post("/generate", response_model=DesignGenerateResponse)
+async def generate_design(
     project_id: int = Form(...),
     project_name: str = Form(...),
+    design_type: str = Form(
+        ..., description="Type of design document (e.g., hld-arch, lld-db)"
+    ),
     description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if design_type not in VALID_DESIGN_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid design_type. Must be one of: {', '.join(VALID_DESIGN_TYPES)}",
+        )
+
     logger.info(
-        f"User {current_user.email} requested RMP generation for {project_name}"
+        f"User {current_user.email} requested {design_type} generation for {project_name}"
     )
 
-    new_folder = CreateFolderRequest(
-        name="requirements_management_plan",
-    )
+    new_folder = CreateFolderRequest(name=design_type)
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
 
     if result.error:
-        raise HTTPException(
-            status_code=500, detail="Failed to create folder to storage"
-        )
-
+        raise HTTPException(status_code=500, detail="Failed to create folder storage")
     folder = result.folder
 
-    unique_title = get_unique_diagram_name(
-        db, project_name, project_id, "requirements_management_plan"
-    )
+    unique_title = get_unique_diagram_name(db, project_name, project_id, design_type)
 
-    logger.info(
-        f"Original title: '{project_name}', Unique title chosen: '{unique_title}'"
-    )
+    file_urls = await list_file(project_id, db, current_user)
+    ai_payload = {"message": description, "storage_paths": file_urls}
 
-    ai_payload = {"message": description}
+    ai_url = get_ai_endpoint(design_type)
     generate_at = datetime.now(timezone.utc)
 
-    ai_data = await call_ai_service(
-        settings.ai_service_url_requirements_management_plan, ai_payload
-    )
+    ai_data = await call_ai_service(ai_url, ai_payload)
 
-    markdown_content = format_rmp_response(ai_data["response"])
+    ai_inner_response = ai_data.get("response", {})
+    markdown_content = format_design_response(ai_inner_response)
 
+    # 5. Upload lên Supabase
     file_name = f"/{folder.name}/{unique_title}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
@@ -99,6 +135,7 @@ async def generate_requirements_management_plan(
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
+    # 6. Transaction DB
     try:
         new_file = Files(
             project_id=project_id,
@@ -110,10 +147,11 @@ async def generate_requirements_management_plan(
             storage_path=path_in_bucket,
             content=markdown_content,
             file_category="ai gen",
-            file_type="requirements_management_plan",
+            file_type=design_type,
             metadata={
                 "message": description,
                 "ai_response": ai_data,
+                "design_category": design_type.split("-")[0],
             },
         )
         db.add(new_file)
@@ -122,16 +160,16 @@ async def generate_requirements_management_plan(
         new_ai_session = Chat_Session(
             project_id=project_id,
             user_id=current_user.id,
-            content_type="requirements_management_plan",
+            content_type=design_type,
             content_id=new_file.id,
             role="ai",
-            message=json.dumps(ai_data["response"]),
+            message=json.dumps(ai_inner_response),
         )
 
         new_user_session = Chat_Session(
             project_id=project_id,
             user_id=current_user.id,
-            content_type="requirements_management_plan",
+            content_type=design_type,
             content_id=new_file.id,
             role="user",
             message=description,
@@ -141,45 +179,51 @@ async def generate_requirements_management_plan(
         db.commit()
         db.refresh(new_file)
 
-        return RMPGenerateResponse(
+        return DesignGenerateResponse(
             document_id=str(new_file.id),
             user_id=str(current_user.id),
             generated_at=str(generate_at),
             input_description=description,
             document=markdown_content,
+            design_type=design_type,
             status=new_file.status,
         )
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Database error during RMP generation: {str(e)}")
+        logger.error(f"Database error during {design_type} generation: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@router.get("/list/{project_id}", response_model=RMPListResponse)
-async def list_requirements_management_plan(
+@router.get("/list/{project_id}", response_model=DesignListResponse)
+async def list_designs(
     project_id: str,
+    design_type: Optional[str] = Query(
+        None, description="Filter by specific design type"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    file_type = "requirements_management_plan"
-    docs_list = (
-        db.query(Files)
-        .filter(
-            Files.created_by == current_user.id,
-            Files.project_id == project_id,
-            Files.file_type == file_type,
-        )
-        .all()
+    query = db.query(Files).filter(
+        Files.created_by == current_user.id,
+        Files.project_id == project_id,
     )
+
+    if design_type:
+        query = query.filter(Files.file_type == design_type)
+    else:
+        query = query.filter(Files.file_type.in_(VALID_DESIGN_TYPES))
+
+    docs_list = query.all()
 
     result = []
     for doc in docs_list:
         result.append(
-            GetRMPResponse(
+            GetDesignResponse(
                 document_id=str(doc.id),
                 project_name=doc.name,
                 content=doc.content,
+                design_type=doc.file_type,
                 status=doc.status,
                 updated_at=doc.updated_at,
             )
@@ -188,36 +232,32 @@ async def list_requirements_management_plan(
     return {"documents": result}
 
 
-@router.get("/get/{project_id}/{document_id}", response_model=GetRMPResponse)
-async def get_rmp_document(
+@router.get("/get/{project_id}/{document_id}", response_model=GetDesignResponse)
+async def get_design_document(
     project_id: str,
     document_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    file_type = "requirements_management_plan"
     doc = (
         db.query(Files)
         .filter(
             Files.project_id == project_id,
             Files.id == document_id,
             Files.created_by == current_user.id,
-            Files.file_type == file_type,
+            Files.file_type.in_(VALID_DESIGN_TYPES),
         )
         .first()
     )
+
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if current_user.id != doc.created_by:
-        raise HTTPException(
-            status_code=403, detail="You don't have permission to access this document."
-        )
-
-    return GetRMPResponse(
+    return GetDesignResponse(
         document_id=str(doc.id),
         project_name=doc.name,
         content=doc.content,
+        design_type=doc.file_type,
         status=doc.status,
         updated_at=doc.updated_at,
     )
@@ -230,24 +270,19 @@ async def export_markdown(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    file_type = "requirements_management_plan"
     doc = (
         db.query(Files)
         .filter(
             Files.project_id == project_id,
             Files.id == document_id,
             Files.created_by == current_user.id,
-            Files.file_type == file_type,
+            Files.file_type.in_(VALID_DESIGN_TYPES),
         )
         .first()
     )
+
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-
-    if current_user.id != doc.created_by:
-        raise HTTPException(
-            status_code=403, detail="You don't have permission to access this document."
-        )
 
     file_stream = BytesIO(doc.content.encode("utf-8"))
     filename = f"{doc.name.replace(' ', '_')}.md"
@@ -259,8 +294,8 @@ async def export_markdown(
     )
 
 
-@router.put("/update/{project_id}/{document_id}", response_model=UpdateRMPResponse)
-async def update_requirements_management_plan(
+@router.put("/update/{project_id}/{document_id}", response_model=UpdateDesignResponse)
+async def update_design_document(
     project_id: str,
     document_id: str,
     content: str = Form(...),
@@ -268,56 +303,27 @@ async def update_requirements_management_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    valid_document_status = [
-        "generated",
-        "draft",
-        "published",
-        "archived",
-    ]
-    if document_status not in valid_document_status:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid document_status '{document_status}'. Must be one of {valid_document_status}.",
-        )
+    valid_status = ["generated", "draft", "published", "archived"]
+    if document_status not in valid_status:
+        raise HTTPException(status_code=400, detail="Invalid status")
 
-    logger.info(f"User {current_user.email} requested update for RMP doc {document_id}")
-    file_type = "requirements_management_plan"
     doc = (
         db.query(Files)
         .filter(
             Files.project_id == project_id,
             Files.id == document_id,
             Files.created_by == current_user.id,
-            Files.file_type == file_type,
+            Files.file_type.in_(VALID_DESIGN_TYPES),
         )
         .first()
     )
 
     if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found or you do not have permission to update it.",
-        )
+        raise HTTPException(status_code=404, detail="Document not found")
 
-    if current_user.id != doc.created_by:
-        raise HTTPException(
-            status_code=403, detail="You don't have permission to access this document."
-        )
-
-    folder = (
-        db.query(Folder)
-        .filter(
-            Folder.project_id == project_id,
-            Folder.id == doc.folder_id,
-        )
-        .first()
-    )
-
+    folder = db.query(Folder).filter(Folder.id == doc.folder_id).first()
     if not folder:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Folder storage not found.",
-        )
+        raise HTTPException(status_code=404, detail="Folder not found")
 
     doc.content = content
     doc.status = document_status
@@ -326,17 +332,15 @@ async def update_requirements_management_plan(
     file_name = f"/{folder.name}/{doc.name}.md"
     file_like = BytesIO(doc.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
+
     path_in_bucket = await update_file_from_supabase(doc.storage_path, upload_file)
-
-    if path_in_bucket is None:
-        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
-
-    doc.storage_path = path_in_bucket
+    if path_in_bucket:
+        doc.storage_path = path_in_bucket
 
     db.commit()
     db.refresh(doc)
 
-    return UpdateRMPResponse(
+    return UpdateDesignResponse(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
@@ -346,57 +350,49 @@ async def update_requirements_management_plan(
 
 
 @router.patch(
-    "/regenerate/{project_id}/{document_id}", response_model=RMPGenerateResponse
+    "/regenerate/{project_id}/{document_id}", response_model=DesignGenerateResponse
 )
-async def regenerate_requirements_management_plan(
+async def regenerate_design(
     project_id: int,
     document_id: str,
     description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    logger.info(
-        f"User {current_user.email} requested RMP regeneration for {document_id}"
-    )
-    file_type = "requirements_management_plan"
     existing_doc = (
         db.query(Files)
         .filter(
             Files.id == document_id,
             Files.project_id == project_id,
-            Files.file_type == file_type,
+            Files.file_type.in_(VALID_DESIGN_TYPES),
         )
         .first()
     )
+
     if not existing_doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="Design document not found")
 
     if current_user.id != existing_doc.created_by:
-        raise HTTPException(
-            status_code=403, detail="You don't have permission to access this document."
-        )
+        raise HTTPException(status_code=403, detail="Permission denied")
 
-    folder = (
-        db.query(Folder)
-        .filter(
-            Folder.project_id == project_id,
-            Folder.id == existing_doc.folder_id,
-        )
-        .first()
-    )
+    design_type = existing_doc.file_type
 
+    folder = db.query(Folder).filter(Folder.id == existing_doc.folder_id).first()
     if not folder:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Folder storage not found.",
-        )
+        raise HTTPException(status_code=404, detail="Folder not found")
 
-    ai_payload = {"message": description, "content_id": document_id}
+    # Lấy URL động từ settings
+    ai_url = get_ai_endpoint(design_type)
+    file_urls = await list_file(project_id, db, current_user)
+    ai_payload = {
+        "message": description,
+        "content_id": document_id,
+        "storage_paths": file_urls,
+    }
 
-    ai_data = await call_ai_service(
-        settings.ai_service_url_requirements_management_plan, ai_payload
-    )
-    markdown_content = format_rmp_response(ai_data["response"])
+    ai_data = await call_ai_service(ai_url, ai_payload)
+    ai_inner_response = ai_data.get("response", {})
+    markdown_content = format_design_response(ai_inner_response)
 
     file_name = f"/{folder.name}/{existing_doc.name}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
@@ -405,8 +401,8 @@ async def regenerate_requirements_management_plan(
         existing_doc.storage_path, upload_file
     )
 
-    if path_in_bucket is None:
-        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+    if not path_in_bucket:
+        raise HTTPException(status_code=500, detail="Failed to upload file")
 
     try:
         generate_at = datetime.now(timezone.utc)
@@ -426,16 +422,16 @@ async def regenerate_requirements_management_plan(
             content_id=existing_doc.id,
             project_id=project_id,
             user_id=current_user.id,
-            content_type="requirements_management_plan",
+            content_type=design_type,
             role="ai",
-            message=json.dumps(ai_data["response"]),
+            message=json.dumps(ai_inner_response),
         )
 
         new_user_session = Chat_Session(
             content_id=existing_doc.id,
             project_id=project_id,
             user_id=current_user.id,
-            content_type="requirements_management_plan",
+            content_type=design_type,
             role="user",
             message=description,
         )
@@ -444,12 +440,13 @@ async def regenerate_requirements_management_plan(
         db.commit()
         db.refresh(existing_doc)
 
-        return RMPGenerateResponse(
+        return DesignGenerateResponse(
             document_id=str(existing_doc.id),
             user_id=str(current_user.id),
             generated_at=str(generate_at),
             input_description=description,
             document=markdown_content,
+            design_type=design_type,
             status=existing_doc.status,
         )
 

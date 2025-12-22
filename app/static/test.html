@@ -1,90 +1,361 @@
 <!DOCTYPE html>
-<html>
-<body>
-<input id="pid" placeholder="project id" value="1">
-<input id="token" placeholder="token here">
-<button onclick="start()">Start</button>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>One Click AI Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<div id="actions" style="display:none; margin-top:10px;">
-  <button onclick="sendYes()">Continue</button>
-  <button onclick="closeWS()">Close</button>
+  <style>
+    body {
+      font-family: Consolas, monospace;
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: #020617;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid #1e293b;
+      margin-bottom: 20px;
+    }
+
+    h2, h3 {
+      margin-top: 0;
+      color: #38bdf8;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      background: #020617;
+      color: #e5e7eb;
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 12px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+      transition: 0.2s;
+    }
+
+    .btn-connect { background: #22c55e; color: black; }
+    .btn-disconnect { background: #ef4444; }
+    .btn-oneclick { background: #38bdf8; color: black; }
+    .btn-continue { background: #22c55e; }
+    .btn-stop { background: #f97316; }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .doc-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .doc-item {
+      background: #020617;
+      border: 1px solid #1e293b;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    #log {
+      height: 520px;
+      overflow-y: auto;
+      background: black;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .log { margin-bottom: 6px; }
+    .log-info { color: #eab308; }
+    .log-ok { color: #22c55e; }
+    .log-error { color: #ef4444; }
+    .log-sent { color: #38bdf8; }
+
+    .status {
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ================= LEFT ================= -->
+  <div>
+
+    <!-- CONNECTION -->
+    <div class="card">
+      <h2>Connection</h2>
+
+      <div class="status" id="status">Disconnected</div>
+
+      <label>WebSocket URL</label>
+      <input id="wsUrl" value="ws://localhost:8010/api/v1/ws/generate" />
+
+      <label>Project ID</label>
+      <input id="projectId" value="1" />
+
+      <label>JWT Token</label>
+      <input id="token" placeholder="Paste JWT token" />
+
+      <button class="btn-connect" onclick="connect()">Connect</button>
+      <button class="btn-disconnect" onclick="disconnect()">Disconnect</button>
+    </div>
+
+    <!-- ONE CLICK -->
+    <div class="card">
+      <h2>One Click</h2>
+
+      <label>Project Name</label>
+      <input id="projectName" value="AI Platform" />
+
+      <label>Description</label>
+      <textarea id="description" rows="3">AI powered SaaS platform</textarea>
+
+      <button class="btn-oneclick" onclick="oneClick()">🚀 One Click Generate</button>
+
+      <button class="btn-continue" onclick="sendContinue()" id="btnContinue" disabled>
+        Continue
+      </button>
+
+      <button class="btn-stop" onclick="sendStop()" id="btnStop" disabled>
+        Stop
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ================= RIGHT ================= -->
+  <div>
+
+    <!-- PLANNING -->
+    <div class="card">
+      <h3>Planning Documents</h3>
+      <div id="planningDocs" class="doc-group"></div>
+    </div>
+
+    <!-- DESIGN -->
+    <div class="card">
+      <h3>Design Documents</h3>
+      <div id="designDocs" class="doc-group"></div>
+    </div>
+
+    <!-- LOG -->
+    <div class="card">
+      <h3>Realtime Logs</h3>
+      <div id="log"></div>
+    </div>
+
+  </div>
+
 </div>
 
-<ul id="log"></ul>
-
 <script>
-let ws
+/* ================= DOCUMENT LIST ================= */
+const PLANNING_DOCS = [
+  { label: "Stakeholder Register", value: "stakeholder-register" },
+  { label: "High Level Requirements", value: "high-level-requirements" },
+  { label: "Requirements Management Plan", value: "requirements-management-plan" },
+  { label: "Business Case", value: "business-case" },
+  { label: "Scope Statement", value: "scope-statement" },
+  { label: "Product Roadmap", value: "product-roadmap" },
+]
 
-function log(m){
-  let li = document.createElement("li")
-  li.innerText = m
-  document.getElementById("log").appendChild(li)
+const DESIGN_DOCS = [
+  { label: "HLD Architecture", value: "hld-arch" },
+  { label: "HLD Cloud", value: "hld-cloud" },
+  { label: "HLD Tech", value: "hld-tech" },
+  { label: "LLD Architecture", value: "lld-arch" },
+  { label: "LLD Database", value: "lld-db" },
+  { label: "LLD API", value: "lld-api" },
+  { label: "LLD Pseudo", value: "lld-pseudo" },
+  { label: "UIUX Wireframe", value: "uiux-wireframe" },
+  { label: "UIUX Mockup", value: "uiux-mockup" },
+  { label: "UIUX Prototype", value: "uiux-prototype" },
+]
+
+/* ================= UI ================= */
+function renderDocs(containerId, docs) {
+  const c = document.getElementById(containerId)
+  c.innerHTML = ""
+  docs.forEach(d => {
+    const div = document.createElement("div")
+    div.className = "doc-item"
+    div.innerHTML = `
+      <label>
+        <input type="checkbox" value="${d.value}" />
+        ${d.label}
+      </label>
+    `
+    c.appendChild(div)
+  })
 }
 
-function start(){
-  const pid = document.getElementById("pid").value
+renderDocs("planningDocs", PLANNING_DOCS)
+renderDocs("designDocs", DESIGN_DOCS)
+
+/* ================= WEBSOCKET ================= */
+let socket = null
+let pendingOneClickPayload = null
+
+const logBox = document.getElementById("log")
+const statusEl = document.getElementById("status")
+const btnContinue = document.getElementById("btnContinue")
+const btnStop = document.getElementById("btnStop")
+
+function log(msg, type = "info") {
+  const div = document.createElement("div")
+  div.className = `log log-${type}`
+  div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`
+  logBox.appendChild(div)
+  logBox.scrollTop = logBox.scrollHeight
+}
+
+function connect() {
+  const base = document.getElementById("wsUrl").value.replace(/\/$/, "")
+  const pid = document.getElementById("projectId").value
   const token = document.getElementById("token").value
 
-  if(!token){
-    alert("Please enter token!")
+  if (!token) {
+    alert("JWT token required")
     return
   }
 
-  ws = new WebSocket(`ws://localhost:8010/ws/one-click/${pid}?token=${token}`)
+  socket = new WebSocket(`${base}/${pid}?token=${token}`)
 
-  ws.onopen = () => {
-    log("WS connected")
-  }
-
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-
-      log(JSON.stringify(data))
-
-      if(data.action === "confirm_continue"){
-        showActions()
-        return
-      }
-
-    } catch (err) {
-      log(event.data)
+  socket.onopen = () => {
+    statusEl.innerText = "Connected"
+    log("Connected", "ok")
+    if (pendingOneClickPayload) {
+      socket.send(JSON.stringify(pendingOneClickPayload))
+      pendingOneClickPayload = null
+      log("ONE CLICK STARTED", "sent")
     }
   }
 
-  ws.onerror = (err) => {
-    log("WS error: " + err.message)
-  }
+  socket.onmessage = e => handleMessage(JSON.parse(e.data))
 
-  ws.onclose = () => {
-    log("WS closed")
-    hideActions()
-  }
-
-}
-
-function showActions(){
-  document.getElementById("actions").style.display = "block"
-}
-
-function hideActions(){
-  document.getElementById("actions").style.display = "none"
-}
-
-function sendYes(){
-  if(ws && ws.readyState === WebSocket.OPEN){
-    ws.send("yes")
-    log("send yes")
-    hideActions()
+  socket.onclose = () => {
+    statusEl.innerText = "Disconnected"
+    btnContinue.disabled = true
+    btnStop.disabled = true
+    log("Disconnected", "error")
   }
 }
 
-function closeWS(){
-  if(ws){
-    ws.close()
-    log("WS manually closed")
+function disconnect() {
+  if (!socket) return
+  socket.send(JSON.stringify({ action: "disconnect" }))
+  socket.close()
+}
+
+/* ================= ACTIONS ================= */
+function getSelectedDocs(id) {
+  return Array.from(
+    document.getElementById(id).querySelectorAll("input:checked")
+  ).map(cb => ({ type: cb.value }))
+}
+
+function oneClick() {
+  const planning = getSelectedDocs("planningDocs")
+  const design = getSelectedDocs("designDocs")
+
+  if (!planning.length && !design.length) {
+    alert("Select at least one document")
+    return
+  }
+
+  const steps = []
+  if (planning.length) steps.push({ name: "planning", documents: planning })
+  if (design.length) steps.push({ name: "design", documents: design })
+
+  const payload = {
+    action: "one_click",
+    project_name: document.getElementById("projectName").value,
+    description: document.getElementById("description").value,
+    steps,
+  }
+
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(payload))
+    log("ONE CLICK STARTED", "sent")
+  } else {
+    pendingOneClickPayload = payload
+    connect()
+  }
+}
+
+function sendContinue() {
+  socket?.send(JSON.stringify({ action: "continue" }))
+  btnContinue.disabled = true
+  btnStop.disabled = true
+  log("CONTINUE", "sent")
+}
+
+function sendStop() {
+  socket?.send(JSON.stringify({ action: "stop" }))
+  btnContinue.disabled = true
+  btnStop.disabled = true
+  log("STOP", "sent")
+}
+
+function handleMessage(data) {
+  switch (data.type) {
+    case "step_start":
+      log(`Start step: ${data.step}`, "info")
+      break
+    case "step_finished":
+      log(`Step finished: ${data.step}`, "ok")
+      break
+    case "await_decision":
+      log(`Waiting decision after ${data.step}`, "info")
+      btnContinue.disabled = false
+      btnStop.disabled = false
+      break
+    case "finished":
+      log("ALL STEPS FINISHED", "ok")
+      break
+    case "stopped":
+      log("PROCESS STOPPED", "error")
+      break
+    default:
+      log(JSON.stringify(data), "info")
   }
 }
 </script>
+
 </body>
 </html>
