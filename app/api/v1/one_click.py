@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# =========================
+# =========================================================
 # WEBSOCKET ENDPOINT
-# =========================
+# =========================================================
 @router.websocket("/ws/generate/{project_id}")
 async def websocket_generate_step(
     websocket: WebSocket,
@@ -66,7 +66,7 @@ async def websocket_generate_step(
     }
 
     # --------------------------------------------------
-    # 3. PROCESS SINGLE DOCUMENT
+    # 3. PROCESS SINGLE DOCUMENT (SEQUENTIAL)
     # --------------------------------------------------
     async def process_single_doc(
         step: str,
@@ -83,7 +83,7 @@ async def websocket_generate_step(
                 }
             )
 
-            # ----- CALL SERVICE -----
+            # ---------------- CALL SERVICE ----------------
             if step == "planning":
                 result = await generate_planning_doc(
                     project_id=project_id,
@@ -136,7 +136,7 @@ async def websocket_generate_step(
             raise
 
         except Exception:
-            logger.exception("Unexpected error")
+            logger.exception("Unexpected error while generating document")
             await websocket.send_json(
                 {
                     "type": "doc_error",
@@ -147,7 +147,7 @@ async def websocket_generate_step(
             )
 
     # --------------------------------------------------
-    # 4. STEP ORCHESTRATOR (RUN BACKGROUND)
+    # 4. STEP ORCHESTRATOR (SEQUENTIAL STEPS)
     # --------------------------------------------------
     async def run_steps():
         for step_cfg in context["steps"]:
@@ -167,6 +167,7 @@ async def websocket_generate_step(
                 )
                 return
 
+            # ---- STEP START ----
             await websocket.send_json(
                 {
                     "type": "step_start",
@@ -174,25 +175,21 @@ async def websocket_generate_step(
                 }
             )
 
-            tasks = [
-                asyncio.create_task(
-                    process_single_doc(
-                        step=step_name,
-                        project_name=context["project_name"],
-                        description=context["description"],
-                        doc_type=doc["type"],
-                    )
+            # ==================================================
+            # 🔁 PROCESS DOCUMENTS ONE BY ONE
+            # ==================================================
+            for doc in documents:
+                if stop_event.is_set():
+                    return
+
+                await process_single_doc(
+                    step=step_name,
+                    project_name=context["project_name"],
+                    description=context["description"],
+                    doc_type=doc["type"],
                 )
-                for doc in documents
-            ]
 
-            try:
-                await asyncio.gather(*tasks)
-            except asyncio.CancelledError:
-                for t in tasks:
-                    t.cancel()
-                raise
-
+            # ---- STEP FINISHED ----
             await websocket.send_json(
                 {
                     "type": "step_finished",
@@ -201,7 +198,9 @@ async def websocket_generate_step(
                 }
             )
 
-            # ⏸ WAIT USER DECISION
+            # ==================================================
+            # ⏸ ASK USER DECISION (ONCE PER STEP)
+            # ==================================================
             continue_event.clear()
             await websocket.send_json(
                 {
@@ -213,6 +212,7 @@ async def websocket_generate_step(
 
             await continue_event.wait()
 
+        # ---- ALL DONE ----
         await websocket.send_json(
             {
                 "type": "finished",
@@ -240,7 +240,7 @@ async def websocket_generate_step(
                     await websocket.send_json(
                         {
                             "type": "error",
-                            "message": "No steps provided from FE",
+                            "message": "No steps provided",
                         }
                     )
                     continue
