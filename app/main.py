@@ -11,7 +11,8 @@ from app.api.v1 import (
     one_click,
     folder,
     design,
-    planning
+    planning,
+    analysis
 )
 from app.core.database import engine, Base
 import logging
@@ -40,7 +41,7 @@ app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
 
 app.include_router(design.router,prefix="/api/v1/design",tags=["design step"])
 app.include_router(planning.router,prefix="/api/v1/planning",tags=["planning step"])
-
+app.include_router(analysis.router,prefix="/api/v1/analysis",tags=["analysis"])
 
 # Configure CORS
 app.add_middleware(

@@ -57,4 +57,9 @@ class Settings(BaseSettings):
     ai_service_url_uiux_wireframe: str
     ai_service_url_uiux_mockup: str
     ai_service_url_uiux_prototype: str
+
+    ai_service_url_feasibility_study: str
+    ai_service_url_cost_benefit_analysis: str
+    ai_service_url_risk_register: str
+    ai_service_url_compliance: str
 settings = Settings()

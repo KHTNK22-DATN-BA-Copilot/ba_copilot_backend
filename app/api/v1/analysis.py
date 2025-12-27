@@ -14,11 +14,13 @@ from app.models.user import User
 from app.models.file import Files
 from app.models.folder import Folder
 from app.models.session import Chat_Session
-from app.schemas.planning import (
-    PlanningGenerateResponse,
-    GetPlanningResponse,
-    PlanningListResponse,
-    UpdatePlanningResponse,
+
+# Import Analysis Schemas
+from app.schemas.analysis import (
+    AnalysisGenerateResponse,
+    GetAnalysisResponse,
+    AnalysisListResponse,
+    UpdateAnalysisResponse,
 )
 from app.schemas.folder import CreateFolderRequest
 from app.core.config import settings
@@ -26,24 +28,20 @@ from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.file_handling import upload_to_supabase, update_file_from_supabase
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
-from app.api.v1.file_upload import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
-VALID_PLANNING_TYPES = [
-    "stakeholder-register",
-    "high-level-requirements",
-    "requirements-management-plan",
-    "business-case",
-    "scope-statement",
-    "product-roadmap",
+# Danh sách các loại tài liệu trong Analysis Step (dựa trên ảnh)
+VALID_ANALYSIS_TYPES = [
+    "feasibility-study",
+    "cost-benefit-analysis",
+    "risk-register",
+    "compliance",
 ]
 
 
 def get_ai_endpoint(doc_type: str) -> str:
-    """Map doc_type sang biến config URL tương ứng"""
     config_name = f"ai_service_url_{doc_type.replace('-', '_')}"
     try:
         return getattr(settings, config_name)
@@ -64,40 +62,31 @@ def format_response(ai_data):
     return str(ai_data)
 
 
-@router.post("/generate", response_model=PlanningGenerateResponse)
-async def generate_planning_doc(
+@router.post("/generate", response_model=AnalysisGenerateResponse)
+async def generate_analysis_doc(
     project_id: int = Form(...),
     project_name: str = Form(...),
-    doc_type: str = Form(..., description="Type of planning document"),
+    doc_type: str = Form(..., description="Type of analysis document"),
     description: Optional[str] = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if doc_type not in VALID_PLANNING_TYPES:
+    if doc_type not in VALID_ANALYSIS_TYPES:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid doc_type. Must be one of: {VALID_PLANNING_TYPES}",
+            status_code=400, detail=f"Invalid doc_type. Must be: {VALID_ANALYSIS_TYPES}"
         )
 
     result = await create_default_folder(
         project_id, CreateFolderRequest(name=doc_type), current_user.id, db
     )
     if result.error:
-        raise HTTPException(status_code=500, detail="Failed to create folder")
+        raise HTTPException(500, "Failed to create folder")
     folder = result.folder
 
-    ai_url = get_ai_endpoint(doc_type)
+    ai_data = await call_ai_service(get_ai_endpoint(doc_type), {"message": description})
+    ai_inner = ai_data.get("response", {})
+    content = format_response(ai_inner)
 
-    file_urls = await list_file(project_id, db, current_user)
-    ai_payload = {"message": description, "storage_paths": file_urls}
-
-    ai_data = await call_ai_service(ai_url, ai_payload)
-
-    # Xử lý response từ AI (giả sử AI trả về {"response": {...}})
-    ai_inner_resp = ai_data.get("response", {})
-    content = format_response(ai_inner_resp)
-
-    # 3. Upload Supabase
     unique_title = get_unique_diagram_name(db, project_name, project_id, doc_type)
     file_path = await upload_to_supabase(
         UploadFile(
@@ -106,9 +95,8 @@ async def generate_planning_doc(
         )
     )
     if not file_path:
-        raise HTTPException(status_code=500, detail="Upload failed")
+        raise HTTPException(500, "Upload failed")
 
-    # 4. Lưu DB (Transaction)
     try:
         new_file = Files(
             project_id=project_id,
@@ -124,12 +112,11 @@ async def generate_planning_doc(
             metadata={
                 "message": description,
                 "ai_response": ai_data,
-                "step": "planning",
+                "step": "analysis",
             },
         )
         db.add(new_file)
         db.flush()
-
         db.add_all(
             [
                 Chat_Session(
@@ -138,7 +125,7 @@ async def generate_planning_doc(
                     content_type=doc_type,
                     content_id=new_file.id,
                     role="ai",
-                    message=json.dumps(ai_inner_resp),
+                    message=json.dumps(ai_inner),
                 ),
                 Chat_Session(
                     project_id=project_id,
@@ -152,8 +139,7 @@ async def generate_planning_doc(
         )
         db.commit()
         db.refresh(new_file)
-
-        return PlanningGenerateResponse(
+        return AnalysisGenerateResponse(
             document_id=str(new_file.id),
             user_id=str(current_user.id),
             generated_at=str(datetime.now(timezone.utc)),
@@ -164,11 +150,11 @@ async def generate_planning_doc(
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
-@router.get("/list/{project_id}", response_model=PlanningListResponse)
-async def list_planning_docs(
+@router.get("/list/{project_id}", response_model=AnalysisListResponse)
+async def list_analysis_docs(
     project_id: str,
     doc_type: Optional[str] = Query(None),
     db: Session = Depends(get_db),
@@ -180,11 +166,11 @@ async def list_planning_docs(
     if doc_type:
         query = query.filter(Files.file_type == doc_type)
     else:
-        query = query.filter(Files.file_type.in_(VALID_PLANNING_TYPES))
+        query = query.filter(Files.file_type.in_(VALID_ANALYSIS_TYPES))
 
     return {
         "documents": [
-            GetPlanningResponse(
+            GetAnalysisResponse(
                 document_id=str(d.id),
                 project_name=d.name,
                 content=d.content,
@@ -197,8 +183,8 @@ async def list_planning_docs(
     }
 
 
-@router.get("/get/{project_id}/{document_id}", response_model=GetPlanningResponse)
-async def get_planning_doc(
+@router.get("/get/{project_id}/{document_id}", response_model=GetAnalysisResponse)
+async def get_analysis_doc(
     project_id: str,
     document_id: str,
     db: Session = Depends(get_db),
@@ -210,13 +196,13 @@ async def get_planning_doc(
             Files.id == document_id,
             Files.project_id == project_id,
             Files.created_by == current_user.id,
-            Files.file_type.in_(VALID_PLANNING_TYPES),
+            Files.file_type.in_(VALID_ANALYSIS_TYPES),
         )
         .first()
     )
     if not doc:
         raise HTTPException(404, "Not found")
-    return GetPlanningResponse(
+    return GetAnalysisResponse(
         document_id=str(doc.id),
         project_name=doc.name,
         content=doc.content,
@@ -226,8 +212,8 @@ async def get_planning_doc(
     )
 
 
-@router.put("/update/{project_id}/{document_id}", response_model=UpdatePlanningResponse)
-async def update_planning_doc(
+@router.put("/update/{project_id}/{document_id}", response_model=UpdateAnalysisResponse)
+async def update_analysis_doc(
     project_id: str,
     document_id: str,
     content: str = Form(...),
@@ -241,7 +227,7 @@ async def update_planning_doc(
             Files.id == document_id,
             Files.project_id == project_id,
             Files.created_by == current_user.id,
-            Files.file_type.in_(VALID_PLANNING_TYPES),
+            Files.file_type.in_(VALID_ANALYSIS_TYPES),
         )
         .first()
     )
@@ -264,7 +250,7 @@ async def update_planning_doc(
         doc.storage_path = path
     db.commit()
     db.refresh(doc)
-    return UpdatePlanningResponse(
+    return UpdateAnalysisResponse(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
@@ -274,9 +260,9 @@ async def update_planning_doc(
 
 
 @router.patch(
-    "/regenerate/{project_id}/{document_id}", response_model=PlanningGenerateResponse
+    "/regenerate/{project_id}/{document_id}", response_model=AnalysisGenerateResponse
 )
-async def regenerate_planning_doc(
+async def regenerate_analysis_doc(
     project_id: int,
     document_id: str,
     description: Optional[str] = Form(""),
@@ -288,7 +274,7 @@ async def regenerate_planning_doc(
         .filter(
             Files.id == document_id,
             Files.project_id == project_id,
-            Files.file_type.in_(VALID_PLANNING_TYPES),
+            Files.file_type.in_(VALID_ANALYSIS_TYPES),
         )
         .first()
     )
@@ -297,16 +283,9 @@ async def regenerate_planning_doc(
     if doc.created_by != current_user.id:
         raise HTTPException(403, "Forbidden")
 
-    file_urls = await list_file(project_id, db, current_user)
-    ai_payload = {
-        "message": description,
-        "content_id": document_id,
-        "storage_paths": file_urls,
-    }
-
     ai_data = await call_ai_service(
         get_ai_endpoint(doc.file_type),
-        ai_payload
+        {"message": description, "content_id": document_id},
     )
     ai_inner = ai_data.get("response", {})
     content = format_response(ai_inner)
@@ -352,7 +331,7 @@ async def regenerate_planning_doc(
         )
         db.commit()
         db.refresh(doc)
-        return PlanningGenerateResponse(
+        return AnalysisGenerateResponse(
             document_id=str(doc.id),
             user_id=str(current_user.id),
             generated_at=str(datetime.now(timezone.utc)),

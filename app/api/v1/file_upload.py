@@ -73,7 +73,7 @@ async def upload(
             # 2) Upload bản RAW lên Supabase
             # ================================================================
             file.file.seek(0)
-            raw_filename = f"/user/{path}/{unique_title}.{suffix}"
+            raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}.{suffix}"
             raw_url = await upload_to_supabase(file,raw_filename)
 
             if not raw_url:
@@ -94,7 +94,7 @@ async def upload(
             # ================================================================
             # 4) Upload file .md lên Supabase
             # ================================================================
-            md_filename = f"/user/{path}/{unique_title}.md"
+            md_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}.md"
 
             with tempfile.NamedTemporaryFile("w", delete=False, suffix=".md") as md_tmp:
                 md_tmp.write(markdown_text)

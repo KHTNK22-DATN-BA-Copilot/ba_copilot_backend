@@ -127,7 +127,7 @@ async def generate_design(
     markdown_content = format_design_response(ai_inner_response)
 
     # 5. Upload lên Supabase
-    file_name = f"/{folder.name}/{unique_title}.md"
+    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -329,7 +329,7 @@ async def update_design_document(
     doc.status = document_status
     doc.updated_by = current_user.id
 
-    file_name = f"/{folder.name}/{doc.name}.md"
+    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
     file_like = BytesIO(doc.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
 
@@ -394,7 +394,7 @@ async def regenerate_design(
     ai_inner_response = ai_data.get("response", {})
     markdown_content = format_design_response(ai_inner_response)
 
-    file_name = f"/{folder.name}/{existing_doc.name}.md"
+    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
