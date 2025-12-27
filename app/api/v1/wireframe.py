@@ -143,7 +143,7 @@ async def generate_wireframe(
         )
 
     ai_content = ai_data.get("response", {}).get("content", "")
-    file_name = f"/{folder.name}/{unique_title}.md"
+    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
     file_like = BytesIO(ai_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -345,7 +345,9 @@ async def regenerate_srs(
     html_content, css_content = extract_html_css_from_content(ai_content)
     existing_wireframe.content = ai_content
 
-    file_name = f"/wireframe/{existing_wireframe.name}.md"
+    file_name = (
+        f"/{current_user.id}/{project_id}/wireframe/{existing_wireframe.name}.md"
+    )
     file_like = BytesIO(existing_wireframe.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
