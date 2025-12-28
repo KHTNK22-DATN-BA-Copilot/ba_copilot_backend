@@ -12,8 +12,10 @@ from app.api.v1 import (
     folder,
     design,
     planning,
-    analysis
+    analysis,
 )
+
+from app.api.v1.ws import planning_ws,design_ws,analysis_ws
 from app.core.database import engine, Base
 import logging
 import time
@@ -42,6 +44,12 @@ app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
 app.include_router(design.router,prefix="/api/v1/design",tags=["design step"])
 app.include_router(planning.router,prefix="/api/v1/planning",tags=["planning step"])
 app.include_router(analysis.router,prefix="/api/v1/analysis",tags=["analysis"])
+
+app.include_router(planning_ws.router,prefix="/api/v1",tags=["planning step websocket"])
+app.include_router(
+    design_ws.router, prefix="/api/v1", tags=["design step websocket"]
+)
+app.include_router(analysis_ws.router, prefix="/api/v1", tags=["analysis step websocket"])
 
 # Configure CORS
 app.add_middleware(
