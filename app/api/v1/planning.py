@@ -102,7 +102,7 @@ async def generate_planning_doc(
     unique_title = get_unique_diagram_name(db, project_name, project_id, doc_type)
     file_path = await upload_to_supabase(
         UploadFile(
-            filename=f"/{current_user.id}/{project_id}/{folder.name}/{unique_title}.md",
+            filename=f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md",
             file=BytesIO(content.encode("utf-8")),
         )
     )
@@ -258,7 +258,7 @@ async def update_planning_doc(
     path = await update_file_from_supabase(
         doc.storage_path,
         UploadFile(
-            filename=f"/{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
+            filename=f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
             file=BytesIO(content.encode("utf-8")),
         ),
     )
@@ -321,7 +321,7 @@ async def regenerate_planning_doc(
     path = await update_file_from_supabase(
         doc.storage_path,
         UploadFile(
-            filename=f"/{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
+            filename=f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
             file=BytesIO(content.encode("utf-8")),
         ),
     )
