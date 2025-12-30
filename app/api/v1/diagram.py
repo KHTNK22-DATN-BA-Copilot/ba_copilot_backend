@@ -119,7 +119,7 @@ async def generate_usecase_diagram(
         ai_data = {"response": get_mock_data(diagram_type)}
         ai_response = ai_data["response"]
 
-    file_name = f"/{current_user.id}/{project_id}/{diagram_type}/{unique_title}.md"
+    file_name = f"{current_user.id}/{project_id}/{diagram_type}/{unique_title}.md"
     file_like = BytesIO(ai_data["response"]["detail"].encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -223,7 +223,7 @@ async def update_usecase_diagram(
 
     diagram.content = content_md
 
-    file_name = f"/{current_user.id}/{project_id}/{diagram.file_type}/{diagram.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{diagram.file_type}/{diagram.name}.md"
     file_like = BytesIO(diagram.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(diagram.storage_path, upload_file)
@@ -406,7 +406,7 @@ async def regenerate_srs(
 
     existing_diagram.content = ai_data["response"]["detail"]
 
-    file_name = f"/{current_user.id}/{project_id}/{existing_diagram.file_type}/{existing_diagram.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{existing_diagram.file_type}/{existing_diagram.name}.md"
     file_like = BytesIO(existing_diagram.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(

@@ -87,7 +87,7 @@ async def generate_srs(
     ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
 
     markdown_content = format_srs_to_markdown(ai_data["response"])
-    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
+    file_name = f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -308,7 +308,7 @@ async def update_usecase_diagram(
     srs_doc.content = content
     srs_doc.status = document_status
     srs_doc.updated_by=current_user.id
-    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{srs_doc.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{folder.name}/{srs_doc.name}.md"
     file_like = BytesIO(srs_doc.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(srs_doc.storage_path, upload_file)
@@ -392,7 +392,7 @@ async def regenerate_srs(
     }
     existing_doc.updated_by=current_user.id
 
-    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
     file_like = BytesIO(existing_doc.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
