@@ -62,4 +62,8 @@ class Settings(BaseSettings):
     ai_service_url_cost_benefit_analysis: str
     ai_service_url_risk_register: str
     ai_service_url_compliance: str
+    
+    # Metadata extraction service
+    ai_service_url_metadata_extraction: str = "http://ai:8000/api/v1/metadata/extract"
+
 settings = Settings()

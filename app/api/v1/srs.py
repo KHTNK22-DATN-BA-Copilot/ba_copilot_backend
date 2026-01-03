@@ -39,6 +39,7 @@ from app.utils.srs_utils import (
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
+from app.utils.metadata_utils import create_ai_generated_metadata
 from app.api.v1.file_upload import list_file
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,15 @@ async def generate_srs(
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
+    # Create structured metadata for AI-generated file
+    file_metadata = create_ai_generated_metadata(
+        doc_type="srs",
+        content=markdown_content,
+        message=description,
+        ai_response=ai_data,
+        step="srs",
+    )
+
     new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -105,10 +115,7 @@ async def generate_srs(
             content=markdown_content,
             file_category="ai gen",
             file_type="srs",
-            metadata={
-                "message": description,
-                "ai_response": ai_data,
-            },
+            file_metadata=file_metadata,
         )
     db.add(new_file)
     db.commit()

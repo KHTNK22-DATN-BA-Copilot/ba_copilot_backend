@@ -38,6 +38,7 @@ from app.utils.file_handling import (
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
+from app.utils.metadata_utils import create_ai_generated_metadata
 from app.api.v1.file_upload import list_file
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,16 @@ async def generate_design(
 
     # 6. Transaction DB
     try:
+        # Create structured metadata for AI-generated file
+        file_metadata = create_ai_generated_metadata(
+            doc_type=design_type,
+            content=markdown_content,
+            message=description,
+            ai_response=ai_data,
+            step="design",
+        )
+        file_metadata["design_category"] = design_type.split("-")[0]
+        
         new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -148,11 +159,7 @@ async def generate_design(
             content=markdown_content,
             file_category="ai gen",
             file_type=design_type,
-            metadata={
-                "message": description,
-                "ai_response": ai_data,
-                "design_category": design_type.split("-")[0],
-            },
+            file_metadata=file_metadata,
         )
         db.add(new_file)
         db.flush()
