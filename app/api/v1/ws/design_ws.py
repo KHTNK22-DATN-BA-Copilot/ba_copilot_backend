@@ -34,29 +34,30 @@ async def ws_design(
         return
 
     await websocket.accept()
-    
-
-   
 
     StepWSNotifier.register(project_id, "design", websocket)
     notifier = StepWSNotifier(project_id, "design")
 
     try:
         data = await websocket.receive_json()
+        existing_task = StepTaskRegistry.get_task(project_id, "design")
 
-        task = StepTaskRegistry.start(
-            project_id,
-            "design",
-            run_design_step(
-                project_id=project_id,
-                project_name=data["project_name"],
-                description=data.get("description", ""),
-                documents=data["documents"],
-                db=db,
-                current_user=current_user,
-                notifier=notifier,
-            ),
-        )
+        if existing_task:
+            task = existing_task
+        else:
+            task = StepTaskRegistry.start(
+                project_id,
+                "design",
+                run_design_step(
+                    project_id=project_id,
+                    project_name=data["project_name"],
+                    description=data.get("description", ""),
+                    documents=data["documents"],
+                    db=db,
+                    current_user=current_user,
+                    notifier=notifier,
+                ),
+            )
 
         await task
         await websocket.close()

@@ -40,19 +40,24 @@ async def ws_planning(
     try:
         data = await websocket.receive_json()
 
-        task = StepTaskRegistry.start(
-            project_id,
-            "planning",
-            run_planning_step(
-                project_id=project_id,
-                project_name=data["project_name"],
-                description=data.get("description", ""),
-                documents=data["documents"],
-                db=db,
-                current_user=current_user,
-                notifier=notifier,
-            ),
-        )
+        existing_task = StepTaskRegistry.get_task(project_id, "planning")
+
+        if existing_task:
+            task = existing_task
+        else:
+            task = StepTaskRegistry.start(
+                project_id,
+                "planning",
+                run_planning_step(
+                    project_id=project_id,
+                    project_name=data["project_name"],
+                    description=data.get("description", ""),
+                    documents=data["documents"],
+                    db=db,
+                    current_user=current_user,
+                    notifier=notifier,
+                ),
+            )
 
         await task
         await websocket.close()
