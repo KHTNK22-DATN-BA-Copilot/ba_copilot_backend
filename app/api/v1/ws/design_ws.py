@@ -7,9 +7,9 @@ from app.models.user import User
 from app.core.step_task_registry import StepTaskRegistry
 from app.services.step_ws_notifier import StepWSNotifier
 from app.services.design_runner import run_design_step
-
+import logging
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 @router.websocket("/ws/projects/{project_id}/design")
 async def ws_design(
@@ -61,6 +61,14 @@ async def ws_design(
 
         await task
         await websocket.close()
-
     except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected by client for project {project_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+        except:
+            pass
+    finally:
+        # QUAN TRỌNG: Luôn luôn hủy đăng ký dù kết thúc kiểu gì
         StepWSNotifier.unregister(project_id, "design", websocket)
