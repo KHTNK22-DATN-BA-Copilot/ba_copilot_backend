@@ -2,19 +2,24 @@ from typing import List
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 import tempfile
 import os
+import logging
 from markitdown import MarkItDown
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.file import Files
 from app.models.user import User
 from app.utils.file_handling import has_extension, upload_to_supabase
 from app.schemas.folder import CreateFolderRequest
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
+from app.utils.call_ai_service import call_ai_service
+from app.utils.metadata_utils import create_user_upload_metadata
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def list_file(
@@ -107,6 +112,43 @@ async def upload(
             if not md_url:
                 raise Exception(f"Failed to upload md file for {file.filename}")
 
+            # ================================================================
+            # 5) Call AI service to extract metadata from markdown
+            # ================================================================
+            file_metadata = {}
+            try:
+                # Generate a temporary ID for the document (will be replaced by actual UUID)
+                temp_doc_id = f"temp-{unique_title}"
+                
+                metadata_payload = {
+                    "document_id": temp_doc_id,
+                    "content": markdown_text,
+                    "filename": file.filename
+                }
+                
+                metadata_response = await call_ai_service(
+                    ai_service_url=settings.ai_service_url_metadata_extraction,
+                    payload=metadata_payload,
+                    retries=2,  # Fewer retries for metadata extraction
+                    read_timeout=120  # 2 minutes timeout
+                )
+                
+                # Parse metadata response using utility function
+                if metadata_response and "response" in metadata_response:
+                    file_metadata = create_user_upload_metadata(
+                        metadata_response=metadata_response,
+                        content=markdown_text,
+                        filename=file.filename
+                    )
+                    logger.info(f"Metadata extracted for {file.filename}")
+            except Exception as me:
+                # Log error but don't fail the upload
+                logger.warning(f"Metadata extraction failed for {file.filename}: {str(me)}")
+                file_metadata = {
+                    "extraction_status": "failed",
+                    "error": str(me)
+                }
+
             raw_record = Files(
                 project_id=project_id,
                 folder_id=folder_id,
@@ -117,6 +159,7 @@ async def upload(
                 storage_md_path=md_url,
                 file_category="user upload",
                 file_type=suffix,
+                file_metadata=file_metadata,
             )
             db.add(raw_record)
             db.commit()

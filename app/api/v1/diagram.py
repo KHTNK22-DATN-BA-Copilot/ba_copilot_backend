@@ -35,6 +35,7 @@ from app.utils.file_handling import (
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.get_unique_name import get_unique_diagram_name
+from app.utils.metadata_utils import create_ai_generated_metadata
 from app.schemas.folder import CreateFolderRequest
 from app.api.v1.file_upload import list_file
 
@@ -119,7 +120,7 @@ async def generate_usecase_diagram(
         ai_data = {"response": get_mock_data(diagram_type)}
         ai_response = ai_data["response"]
 
-    file_name = f"/{current_user.id}/{project_id}/{diagram_type}/{unique_title}.md"
+    file_name = f"{current_user.id}/{project_id}/{diagram_type}/{unique_title}.md"
     file_like = BytesIO(ai_data["response"]["detail"].encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
@@ -127,6 +128,22 @@ async def generate_usecase_diagram(
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
     try:
+        # Map diagram_type to document type
+        doc_type_map = {
+            "usecase": "usecase-diagram",
+            "class": "class-diagram",
+            "activity": "activity-diagram",
+        }
+        doc_type = doc_type_map.get(diagram_type, diagram_type)
+        
+        # Create structured metadata for AI-generated file
+        file_metadata = create_ai_generated_metadata(
+            doc_type=doc_type,
+            content=ai_data["response"]["detail"],
+            message=description,
+            ai_response=ai_data,
+            step="diagram",
+        )
 
         new_file = Files(
             project_id=project_id,
@@ -139,10 +156,7 @@ async def generate_usecase_diagram(
             content=ai_data["response"]["detail"],
             file_category="ai gen",
             file_type=diagram_type,
-            metadata={
-                "message": description,
-                "ai_response": ai_data,
-            },
+            file_metadata=file_metadata,
         )
         db.add(new_file)
         db.flush()  # get generated diagram_id + version without commit
@@ -223,7 +237,7 @@ async def update_usecase_diagram(
 
     diagram.content = content_md
 
-    file_name = f"/{current_user.id}/{project_id}/{diagram.file_type}/{diagram.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{diagram.file_type}/{diagram.name}.md"
     file_like = BytesIO(diagram.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(diagram.storage_path, upload_file)
@@ -406,7 +420,7 @@ async def regenerate_srs(
 
     existing_diagram.content = ai_data["response"]["detail"]
 
-    file_name = f"/{current_user.id}/{project_id}/{existing_diagram.file_type}/{existing_diagram.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{existing_diagram.file_type}/{existing_diagram.name}.md"
     file_like = BytesIO(existing_diagram.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
