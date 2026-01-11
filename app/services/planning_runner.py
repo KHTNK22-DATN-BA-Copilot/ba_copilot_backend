@@ -38,7 +38,7 @@ async def run_planning_step(
             try: 
                 result = await generate_planning_doc(
                     project_id=project_id,
-                    project_name=project_name,
+                    project_name=doc_type,
                     doc_type=doc_type,
                     description=description,
                     db=db,
@@ -57,8 +57,12 @@ async def run_planning_step(
 
             except HTTPException as he:
 
-                error_msg = str(he.detail)
-                logger.info(f"SKIP PLANNING ERROR {doc_type}: {error_msg}")
+                error_payload = {
+                    "code": he.status_code,
+                    "message": he.detail,
+                }
+
+                logger.warning(f"[PLANNING][{doc_type}] {error_payload}")
 
                 await notifier.send(
                     {
@@ -66,16 +70,18 @@ async def run_planning_step(
                         "step": "planning",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_msg,
+                        "error": error_payload,
                     }
                 )
-                continue  
+                continue
 
             except Exception as e:
+                error_payload = {
+                    "code": 500,
+                    "message": str(e),
+                }
 
-                error_msg = str(e)
-                logger.info(f"SKIP PLANNING ERROR {doc_type}: {error_msg}")
-                traceback.print_exc()
+                logger.exception(f"[PLANNING][{doc_type}] UNEXPECTED ERROR")
 
                 await notifier.send(
                     {
@@ -83,10 +89,10 @@ async def run_planning_step(
                         "step": "planning",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_msg,
+                        "error": error_payload,
                     }
                 )
-                continue  
+                continue
 
         await notifier.send(
             {

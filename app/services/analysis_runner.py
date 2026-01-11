@@ -34,10 +34,10 @@ async def run_analysis_step(
                 }
             )
 
-            try:  # <--- Bắt lỗi từng Document
+            try: 
                 result = await generate_analysis_doc(
                     project_id=project_id,
-                    project_name=project_name,
+                    project_name=doc_type,
                     doc_type=doc_type,
                     description=description,
                     db=db,
@@ -55,8 +55,13 @@ async def run_analysis_step(
                 )
 
             except HTTPException as he:
-                error_msg = str(he.detail)
-                logger.info(f"SKIP ANALYSIS ERROR {doc_type}: {error_msg}")
+
+                error_payload = {
+                    "code": he.status_code,
+                    "message": he.detail,
+                }
+
+                logger.warning(f"[ANALYSIS][{doc_type}] {error_payload}")
 
                 await notifier.send(
                     {
@@ -64,15 +69,18 @@ async def run_analysis_step(
                         "step": "analysis",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_msg,
+                        "error": error_payload,
                     }
                 )
-                continue  
+                continue
 
             except Exception as e:
-                error_msg = str(e)
-                logger.info(f" SYSTEM ERROR {doc_type}: {error_msg}")
-                traceback.print_exc()
+                error_payload = {
+                    "code": 500,
+                    "message": str(e),
+                }
+
+                logger.exception(f"[ANALYSIS][{doc_type}] UNEXPECTED ERROR")
 
                 await notifier.send(
                     {
@@ -80,10 +88,10 @@ async def run_analysis_step(
                         "step": "analysis",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_msg,
+                        "error": error_payload,
                     }
                 )
-                continue  
+                continue
 
         await notifier.send(
             {
@@ -93,9 +101,11 @@ async def run_analysis_step(
         )
 
     except Exception as e:
+
         logger.info(f"FATAL ANALYSIS ERROR: {str(e)}")
         await notifier.send(
             {"type": "step_error", "step": "analysis", "message": str(e)}
         )
     finally:
+
         StepTaskRegistry.finish(project_id, "analysis")

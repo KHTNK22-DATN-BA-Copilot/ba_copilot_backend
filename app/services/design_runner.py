@@ -33,7 +33,7 @@ async def run_design_step(
             try:
                 result = await generate_design(
                     project_id=project_id,
-                    project_name=project_name,
+                    project_name=doc_type,
                     design_type=doc_type,
                     description=description,
                     db=db,
@@ -49,10 +49,15 @@ async def run_design_step(
                         "data": result.model_dump(),
                     }
                 )
-                
+
             except HTTPException as he:
-                error_msg = str(he.detail)
-                logger.info(f"SKIP PLANNING ERROR {doc_type}: {error_msg}")
+
+                error_payload = {
+                    "code": he.status_code,
+                    "message": he.detail,
+                }
+
+                logger.warning(f"[DESIGN][{doc_type}] {error_payload}")
 
                 await notifier.send(
                     {
@@ -60,33 +65,43 @@ async def run_design_step(
                         "step": "design",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_msg,
+                        "error": error_payload,
                     }
                 )
-                continue 
-
-            except Exception as e:
-
-                error_msg = str(e.detail) if isinstance(e, HTTPException) else str(e)
-                logger.info(f" SKIP ERROR {doc_type}: {error_msg}")
-
-                await notifier.send(
-                    {
-                        "type": "doc_error",
-                        "step": "design",
-                        "index": index,
-                        "doc_type": doc_type,
-                        "error": error_msg,
-                    }
-                )
-
                 continue
 
-        await notifier.send({"type": "step_finished", "step": "design"})
+            except Exception as e:
+                error_payload = {
+                    "code": 500,
+                    "message": str(e),
+                }
+
+                logger.exception(f"[DESIGN][{doc_type}] UNEXPECTED ERROR")
+
+                await notifier.send(
+                    {
+                        "type": "doc_error",
+                        "step": "design",
+                        "index": index,
+                        "doc_type": doc_type,
+                        "error": error_payload,
+                    }
+                )
+                continue
+
+        await notifier.send(
+            {
+                "type": "step_finished",
+                "step": "design",
+            }
+        )
 
     except Exception as e:
 
-        logger.info(f"FATAL ERROR: {str(e)}")
-        await notifier.send({"type": "step_error", "step": "design", "message": str(e)})
+        logger.info(f"FATAL DESIGN ERROR: {str(e)}")
+        await notifier.send(
+            {"type": "step_error", "step": "design", "message": str(e)}
+        )
     finally:
+
         StepTaskRegistry.finish(project_id, "design")
