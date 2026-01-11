@@ -7,9 +7,9 @@ from app.models.user import User
 from app.core.step_task_registry import StepTaskRegistry
 from app.services.step_ws_notifier import StepWSNotifier
 from app.services.design_runner import run_design_step
-
+import logging
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 @router.websocket("/ws/projects/{project_id}/design")
 async def ws_design(
@@ -34,32 +34,41 @@ async def ws_design(
         return
 
     await websocket.accept()
-    
-
-   
 
     StepWSNotifier.register(project_id, "design", websocket)
     notifier = StepWSNotifier(project_id, "design")
 
     try:
         data = await websocket.receive_json()
+        existing_task = StepTaskRegistry.get_task(project_id, "design")
 
-        task = StepTaskRegistry.start(
-            project_id,
-            "design",
-            run_design_step(
-                project_id=project_id,
-                project_name=data["project_name"],
-                description=data.get("description", ""),
-                documents=data["documents"],
-                db=db,
-                current_user=current_user,
-                notifier=notifier,
-            ),
-        )
+        if existing_task:
+            task = existing_task
+        else:
+            task = StepTaskRegistry.start(
+                project_id,
+                "design",
+                run_design_step(
+                    project_id=project_id,
+                    project_name=data["project_name"],
+                    description=data.get("description", ""),
+                    documents=data["documents"],
+                    db=db,
+                    current_user=current_user,
+                    notifier=notifier,
+                ),
+            )
 
         await task
         await websocket.close()
-
     except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected by client for project {project_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+        except:
+            pass
+    finally:
+        # QUAN TRỌNG: Luôn luôn hủy đăng ký dù kết thúc kiểu gì
         StepWSNotifier.unregister(project_id, "design", websocket)

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends,status
 from sqlalchemy.orm import Session
-
+import logging
 from app.core.database import get_db
 from app.core.security import verify_token
 from app.models.user import User
@@ -9,6 +9,7 @@ from app.services.step_ws_notifier import StepWSNotifier
 from app.services.planning_runner import run_planning_step
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.websocket("/ws/projects/{project_id}/planning")
 async def ws_planning(
@@ -40,22 +41,36 @@ async def ws_planning(
     try:
         data = await websocket.receive_json()
 
-        task = StepTaskRegistry.start(
-            project_id,
-            "planning",
-            run_planning_step(
-                project_id=project_id,
-                project_name=data["project_name"],
-                description=data.get("description", ""),
-                documents=data["documents"],
-                db=db,
-                current_user=current_user,
-                notifier=notifier,
-            ),
-        )
+        existing_task = StepTaskRegistry.get_task(project_id, "planning")
+
+        if existing_task:
+            task = existing_task
+        else:
+            task = StepTaskRegistry.start(
+                project_id,
+                "planning",
+                run_planning_step(
+                    project_id=project_id,
+                    project_name=data["project_name"],
+                    description=data.get("description", ""),
+                    documents=data["documents"],
+                    db=db,
+                    current_user=current_user,
+                    notifier=notifier,
+                ),
+            )
 
         await task
         await websocket.close()
 
     except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected by client for project {project_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+        except:
+            pass
+    finally:
+        # QUAN TRỌNG: Luôn luôn hủy đăng ký dù kết thúc kiểu gì
         StepWSNotifier.unregister(project_id, "planning", websocket)
