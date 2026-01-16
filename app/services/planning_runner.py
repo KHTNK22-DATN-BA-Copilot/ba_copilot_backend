@@ -1,5 +1,6 @@
 import traceback
 from fastapi import HTTPException
+import asyncio
 from app.api.v1.planning import generate_planning_doc
 from app.core.step_task_registry import StepTaskRegistry
 import logging
@@ -24,6 +25,8 @@ async def run_planning_step(
         )
 
         for index, doc in enumerate(documents):
+            if asyncio.current_task().cancelled():
+                raise asyncio.CancelledError()
             doc_type = doc["type"]
 
             await notifier.send(
@@ -54,6 +57,10 @@ async def run_planning_step(
                         "data": result.model_dump(),
                     }
                 )
+
+            except asyncio.CancelledError:
+                logger.warning(f"[PLANNING][{doc_type}] Generation CANCELLED by user.")
+                raise
 
             except HTTPException as he:
 
@@ -100,6 +107,9 @@ async def run_planning_step(
                 "step": "planning",
             }
         )
+
+    except asyncio.CancelledError:
+        logger.info(f"Process for project {project_id} fully stopped.")
 
     except Exception as e:
 

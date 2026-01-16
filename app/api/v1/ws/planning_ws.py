@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends,status
 from sqlalchemy.orm import Session
 import logging
@@ -44,7 +45,28 @@ async def ws_planning(
         existing_task = StepTaskRegistry.get_task(project_id, "planning")
 
         if existing_task:
-            task = existing_task
+            logger.info("Cancelling previous planning task")
+            existing_task.cancel()
+            try:
+                await existing_task
+                
+            except asyncio.CancelledError:
+                pass
+
+            task = StepTaskRegistry.start(
+                project_id,
+                "planning",
+                run_planning_step(
+                    project_id=project_id,
+                    project_name=data["project_name"],
+                    description=data.get("description", ""),
+                    documents=data["documents"],
+                    db=db,
+                    current_user=current_user,
+                    notifier=notifier,
+                ),
+            )
+
         else:
             task = StepTaskRegistry.start(
                 project_id,
@@ -65,6 +87,14 @@ async def ws_planning(
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected by client for project {project_id}")
+        task = StepTaskRegistry.get_task(project_id, "planning")
+        if task and not task.done():
+            logger.info(f"Cancelling planning task for project {project_id}")
+            task.cancel() 
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         try:
