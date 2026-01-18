@@ -1,11 +1,13 @@
-import traceback
-from fastapi import HTTPException
 import asyncio
-from app.api.v1.planning import generate_planning_doc
-from app.core.step_task_registry import StepTaskRegistry
 import logging
+from app.api.v1.planning import (
+    generate_planning_doc,
+)  
+from app.core.step_task_registry import StepTaskRegistry
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
+
 
 async def run_planning_step(
     project_id: int,
@@ -15,18 +17,30 @@ async def run_planning_step(
     db,
     current_user,
     notifier,
+    stop_event: asyncio.Event = None,  
 ):
-    try:  
-        await notifier.send(
-            {
-                "type": "step_start",
-                "step": "planning",
-            }
-        )
+    try:
+        await notifier.send({"type": "step_start", "step": "planning"})
 
         for index, doc in enumerate(documents):
+           
+            if stop_event and stop_event.is_set():
+                logger.info(
+                    f"Project {project_id}: Planning generation stopped by user request."
+                )
+                await notifier.send(
+                    {
+                        "type": "step_stopped", 
+                        "step": "planning",
+                        "message": "User requested stop. Remaining tasks skipped.",
+                    }
+                )
+                break
+            # ------------------------------------
+
             if asyncio.current_task().cancelled():
                 raise asyncio.CancelledError()
+
             doc_type = doc["type"]
 
             await notifier.send(
@@ -38,7 +52,8 @@ async def run_planning_step(
                 }
             )
 
-            try: 
+            try:
+               
                 result = await generate_planning_doc(
                     project_id=project_id,
                     project_name=doc_type,
@@ -59,18 +74,14 @@ async def run_planning_step(
                 )
 
             except asyncio.CancelledError:
-                logger.warning(f"[PLANNING][{doc_type}] Generation CANCELLED by user.")
+                logger.warning(
+                    f"[PLANNING][{doc_type}] Generation CANCELLED (Hard stop)."
+                )
                 raise
 
             except HTTPException as he:
-
-                error_payload = {
-                    "code": he.status_code,
-                    "message": he.detail,
-                }
-
+                error_payload = {"code": he.status_code, "message": he.detail}
                 logger.warning(f"[PLANNING][{doc_type}] {error_payload}")
-
                 await notifier.send(
                     {
                         "type": "doc_error",
@@ -80,27 +91,22 @@ async def run_planning_step(
                         "error": error_payload,
                     }
                 )
-                continue
+                continue  
 
             except Exception as e:
-                error_payload = {
-                    "code": 500,
-                    "message": str(e),
-                }
-
                 logger.exception(f"[PLANNING][{doc_type}] UNEXPECTED ERROR")
-
                 await notifier.send(
                     {
                         "type": "doc_error",
                         "step": "planning",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_payload,
+                        "error": {"code": 500, "message": str(e)},
                     }
                 )
                 continue
 
+       
         await notifier.send(
             {
                 "type": "step_finished",
@@ -109,14 +115,14 @@ async def run_planning_step(
         )
 
     except asyncio.CancelledError:
-        logger.info(f"Process for project {project_id} fully stopped.")
+        logger.info(
+            f"Process for project {project_id} fully stopped (Connection Lost)."
+        )
 
     except Exception as e:
-
-        logger.info(f"FATAL PLANNING ERROR: {str(e)}")
+        logger.error(f"FATAL PLANNING ERROR: {str(e)}")
         await notifier.send(
             {"type": "step_error", "step": "planning", "message": str(e)}
         )
     finally:
-
-        StepTaskRegistry.finish(project_id, "planning")
+        StepTaskRegistry.finish(project_id,current_user.id ,"planning")

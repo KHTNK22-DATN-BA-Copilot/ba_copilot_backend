@@ -1,10 +1,13 @@
-import traceback
-from fastapi import HTTPException
-from app.api.v1.design import generate_design
-from app.core.step_task_registry import StepTaskRegistry
+import asyncio
 import logging
+from app.api.v1.design import (
+    generate_design,
+)
+from app.core.step_task_registry import StepTaskRegistry
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
+
 
 async def run_design_step(
     project_id: int,
@@ -14,11 +17,30 @@ async def run_design_step(
     db,
     current_user,
     notifier,
+    stop_event: asyncio.Event = None,
 ):
     try:
         await notifier.send({"type": "step_start", "step": "design"})
 
         for index, doc in enumerate(documents):
+
+            if stop_event and stop_event.is_set():
+                logger.info(
+                    f"Project {project_id}: design generation stopped by user request."
+                )
+                await notifier.send(
+                    {
+                        "type": "step_stopped",
+                        "step": "design",
+                        "message": "User requested stop. Remaining tasks skipped.",
+                    }
+                )
+                break
+            # ------------------------------------
+
+            if asyncio.current_task().cancelled():
+                raise asyncio.CancelledError()
+
             doc_type = doc["type"]
 
             await notifier.send(
@@ -31,6 +53,7 @@ async def run_design_step(
             )
 
             try:
+
                 result = await generate_design(
                     project_id=project_id,
                     project_name=doc_type,
@@ -50,15 +73,15 @@ async def run_design_step(
                     }
                 )
 
+            except asyncio.CancelledError:
+                logger.warning(
+                    f"[design][{doc_type}] Generation CANCELLED (Hard stop)."
+                )
+                raise
+
             except HTTPException as he:
-
-                error_payload = {
-                    "code": he.status_code,
-                    "message": he.detail,
-                }
-
-                logger.warning(f"[DESIGN][{doc_type}] {error_payload}")
-
+                error_payload = {"code": he.status_code, "message": he.detail}
+                logger.warning(f"[design][{doc_type}] {error_payload}")
                 await notifier.send(
                     {
                         "type": "doc_error",
@@ -71,20 +94,14 @@ async def run_design_step(
                 continue
 
             except Exception as e:
-                error_payload = {
-                    "code": 500,
-                    "message": str(e),
-                }
-
-                logger.exception(f"[DESIGN][{doc_type}] UNEXPECTED ERROR")
-
+                logger.exception(f"[design][{doc_type}] UNEXPECTED ERROR")
                 await notifier.send(
                     {
                         "type": "doc_error",
                         "step": "design",
                         "index": index,
                         "doc_type": doc_type,
-                        "error": error_payload,
+                        "error": {"code": 500, "message": str(e)},
                     }
                 )
                 continue
@@ -96,12 +113,15 @@ async def run_design_step(
             }
         )
 
-    except Exception as e:
+    except asyncio.CancelledError:
+        logger.info(
+            f"Process for project {project_id} fully stopped (Connection Lost)."
+        )
 
-        logger.info(f"FATAL DESIGN ERROR: {str(e)}")
+    except Exception as e:
+        logger.error(f"FATAL design ERROR: {str(e)}")
         await notifier.send(
             {"type": "step_error", "step": "design", "message": str(e)}
         )
     finally:
-
-        StepTaskRegistry.finish(project_id, "design")
+        StepTaskRegistry.finish(project_id,current_user.id, "design")
