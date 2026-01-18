@@ -11,6 +11,7 @@ class PlanningGenerateResponse(BaseModel):
     document: str
     doc_type: str
     status: str
+    recommend_documents: Optional[List[str]] = None
 
 
 class GetPlanningResponse(BaseModel):

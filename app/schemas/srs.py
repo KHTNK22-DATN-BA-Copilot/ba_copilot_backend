@@ -29,6 +29,7 @@ class SRSGenerateResponse(BaseModel):
     document: str = Field(
         ..., description="Generated SRS document in Markdown format"
     )
+    recommend_documents: Optional[List[str]] = None
     status: str = Field(..., description="Generation status")
 
 class GetSRSResponse(BaseModel):

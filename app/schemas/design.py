@@ -19,6 +19,7 @@ class DesignGenerateResponse(BaseModel):
     document: str = Field(..., description="Generated content (Markdown/Mermaid) code")
     design_type: str = Field(..., description="Type of design (e.g., hld-arch, lld-db)")
     status: str = Field(..., description="Generation status")
+    recommend_documents: Optional[List[str]] = None
 
 
 class GetDesignResponse(BaseModel):
