@@ -25,6 +25,10 @@ async def call_ai_service(
     )
 
     for attempt in range(1, retries + 1):
+        if asyncio.current_task() and asyncio.current_task().cancelled():
+            logger.info(f"Task cancelled before attempt {attempt}")
+            raise asyncio.CancelledError()
+
         try:
             logger.info(
                 f"Calling AI service (attempt {attempt}/{retries}) → {ai_service_url}"
@@ -60,7 +64,7 @@ async def call_ai_service(
             response_content = data.get("response")
 
             if isinstance(response_content, str):
-                if response_content.strip().lower().startswith("Error "):
+                if response_content.strip().lower().startswith("error:"):
                     raise HTTPException(
                         status_code=502,
                         detail=response_content.strip(),
@@ -73,6 +77,10 @@ async def call_ai_service(
                 )
 
             return data
+
+        except asyncio.CancelledError:
+            logger.warning(f"AI Service Call cancelled at {ai_service_url}")
+            raise
 
         except HTTPException:
             raise

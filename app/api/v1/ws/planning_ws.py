@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends,status
 from sqlalchemy.orm import Session
 import logging
@@ -39,32 +40,74 @@ async def ws_planning(
     notifier = StepWSNotifier(project_id, "planning")
 
     try:
-        data = await websocket.receive_json()
-
-        existing_task = StepTaskRegistry.get_task(project_id, "planning")
+        init_data = await websocket.receive_json()
+        existing_task = StepTaskRegistry.get_task(
+            project_id, current_user.id, "planning"
+        )
 
         if existing_task:
-            task = existing_task
-        else:
-            task = StepTaskRegistry.start(
-                project_id,
-                "planning",
-                run_planning_step(
-                    project_id=project_id,
-                    project_name=data["project_name"],
-                    description=data.get("description", ""),
-                    documents=data["documents"],
-                    db=db,
-                    current_user=current_user,
-                    notifier=notifier,
-                ),
-            )
+            logger.info("Cancelling previous planning task")
+            existing_task.cancel()
+            try:
+                await existing_task
 
+            except asyncio.CancelledError:
+                pass
+
+        stop_event = asyncio.Event()
+
+        task = StepTaskRegistry.start(
+            project_id,
+            current_user.id,
+            "planning",
+            run_planning_step(
+                project_id=project_id,
+                project_name=init_data["project_name"],
+                description=init_data.get("description", ""),
+                documents=init_data["documents"],
+                db=db,
+                current_user=current_user,
+                notifier=notifier,
+                stop_event=stop_event,
+            ),
+        )
+
+        while not task.done():
+            recv_task = asyncio.create_task(websocket.receive_json())
+            done, pending = await asyncio.wait(
+                [task, recv_task], return_when=asyncio.FIRST_COMPLETED
+            )
+            if task in done:
+                recv_task.cancel()  
+                break
+            if recv_task in done:
+                try:
+                    msg = recv_task.result()
+                    if isinstance(msg, dict) and msg.get("action") == "stop":
+                        logger.info(
+                            f"Received STOP signal from FE for project {project_id}"
+                        )
+                        stop_event.set()
+                    else:
+                        logger.warning(f"Ignored message during generation: {msg}")
+                except WebSocketDisconnect:
+                    raise
+                except Exception as e:
+                    logger.error(f"Socket receive error: {e}")
+                    break
         await task
         await websocket.close()
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected by client for project {project_id}")
+        task = StepTaskRegistry.get_task(project_id,current_user.id ,"planning")
+        if task and not task.done():
+            logger.info(f"Cancelling planning task for project {project_id}")
+            task.cancel() 
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         try:
@@ -72,5 +115,4 @@ async def ws_planning(
         except:
             pass
     finally:
-        # QUAN TRỌNG: Luôn luôn hủy đăng ký dù kết thúc kiểu gì
-        StepWSNotifier.unregister(project_id, "planning", websocket)
+        StepWSNotifier.unregister(project_id,"planning", websocket)

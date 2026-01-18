@@ -1,8 +1,10 @@
+from io import BytesIO
 from typing import List
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 import tempfile
 import os
 import logging
+from fastapi.responses import StreamingResponse
 from markitdown import MarkItDown
 from sqlalchemy.orm import Session
 
@@ -61,7 +63,7 @@ async def upload(
         for file in files:
             if not file.filename or not has_extension(file.filename):
                 continue
-            
+
             suffix = os.path.splitext(file.filename)[1]
             file_name = os.path.splitext(file.filename)[0]
             unique_title = get_unique_diagram_name(db, file_name, project_id, suffix)
@@ -119,20 +121,20 @@ async def upload(
             try:
                 # Generate a temporary ID for the document (will be replaced by actual UUID)
                 temp_doc_id = f"temp-{unique_title}"
-                
+
                 metadata_payload = {
                     "document_id": temp_doc_id,
                     "content": markdown_text,
                     "filename": file.filename
                 }
-                
+
                 metadata_response = await call_ai_service(
                     ai_service_url=settings.ai_service_url_metadata_extraction,
                     payload=metadata_payload,
                     retries=2,  # Fewer retries for metadata extraction
                     read_timeout=120  # 2 minutes timeout
                 )
-                
+
                 # Parse metadata response using utility function
                 if metadata_response and "response" in metadata_response:
                     file_metadata = create_user_upload_metadata(
@@ -170,3 +172,37 @@ async def upload(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export/{document_id}", response_class=StreamingResponse)
+async def export_markdown(
+   
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    
+    doc = (
+        db.query(Files)
+        .filter(
+            Files.id == document_id,
+            Files.created_by == current_user.id,
+        )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if current_user.id != doc.created_by:
+        raise HTTPException(
+            status_code=403, detail="You don't have permission to access this document."
+        )
+
+    file_stream = BytesIO(doc.content.encode("utf-8"))
+    filename = f"{doc.name.replace(' ', '_')}.md"
+
+    return StreamingResponse(
+        file_stream,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
