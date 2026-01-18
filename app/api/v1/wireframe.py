@@ -28,6 +28,7 @@ from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.folder_utils import create_default_folder
 from app.schemas.folder import CreateFolderRequest
 from app.api.v1.file_upload import list_file
+from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -99,16 +100,26 @@ async def generate_wireframe(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    dependency_result = validate_dependencies(
+        project_id, "uiux-wireframe", db, current_user
+    )
+    if not dependency_result["can_proceed"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot generate wireframe. Missing required documents: {dependency_result['missing_required']}",
+        )
 
-    new_folder=CreateFolderRequest(
+    new_folder = CreateFolderRequest(
         name="Wireframe",
     )
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
 
     if result.error:
-        raise HTTPException(status_code=500, detail="Failed to create wireframe folder to storage")
+        raise HTTPException(
+            status_code=500, detail="Failed to create wireframe folder to storage"
+        )
 
-    folder=result.folder
+    folder = result.folder
 
     combined_input = f"""
         Project Description:
@@ -125,7 +136,7 @@ async def generate_wireframe(
         f"Original title: '{wireframe_name}', Unique title chosen: '{unique_title}'"
     )
 
-    file_urls=await list_file(project_id,db,current_user)
+    file_urls = await list_file(project_id, db, current_user)
     ai_payload = {"message": combined_input, "storage_paths": file_urls}
 
     # Call AI service
@@ -214,6 +225,7 @@ async def generate_wireframe(
         input_description=combined_input,
         html_content=html_content,
         css_content=css_content,
+        recommend_documents=dependency_result["missing_recommended"],
     )
 
 
@@ -321,12 +333,12 @@ async def regenerate_srs(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    file_urls=await list_file(project_id,db,current_user)
+    file_urls = await list_file(project_id, db, current_user)
 
     ai_payload = {
         "message": description,
         "content_id": wireframe_id,
-        "storage_paths": file_urls
+        "storage_paths": file_urls,
     }
 
     try:
@@ -345,9 +357,7 @@ async def regenerate_srs(
     html_content, css_content = extract_html_css_from_content(ai_content)
     existing_wireframe.content = ai_content
 
-    file_name = (
-        f"{current_user.id}/{project_id}/wireframe/{existing_wireframe.name}.md"
-    )
+    file_name = f"{current_user.id}/{project_id}/wireframe/{existing_wireframe.name}.md"
     file_like = BytesIO(existing_wireframe.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
@@ -358,10 +368,9 @@ async def regenerate_srs(
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
     existing_wireframe.storage_path = path_in_bucket
-    existing_wireframe.updated_by=current_user.id
+    existing_wireframe.updated_by = current_user.id
 
     try:
-
         generate_at = datetime.now(timezone.utc)
 
         new_user_session = Chat_Session(

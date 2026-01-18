@@ -28,6 +28,7 @@ from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_ai_generated_metadata
 from app.api.v1.file_upload import list_file
+from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -80,6 +81,13 @@ async def generate_planning_doc(
             detail=f"Invalid doc_type. Must be one of: {VALID_PLANNING_TYPES}",
         )
 
+    dependency_result = validate_dependencies(project_id, doc_type, db, current_user)
+    if not dependency_result["can_proceed"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot generate {doc_type}. Missing required documents: {dependency_result['missing_required']}",
+        )
+
     result = await create_default_folder(
         project_id, CreateFolderRequest(name=doc_type), current_user.id, db
     )
@@ -119,7 +127,7 @@ async def generate_planning_doc(
             ai_response=ai_data,
             step="planning",
         )
-        
+
         new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -167,6 +175,7 @@ async def generate_planning_doc(
             document=content,
             doc_type=doc_type,
             status=new_file.status,
+            recommend_documents=dependency_result["missing_recommended"],
         )
     except Exception as e:
         db.rollback()
@@ -310,10 +319,7 @@ async def regenerate_planning_doc(
         "storage_paths": file_urls,
     }
 
-    ai_data = await call_ai_service(
-        get_ai_endpoint(doc.file_type),
-        ai_payload
-    )
+    ai_data = await call_ai_service(get_ai_endpoint(doc.file_type), ai_payload)
     ai_inner = ai_data.get("response", {})
     content = format_response(ai_inner)
 

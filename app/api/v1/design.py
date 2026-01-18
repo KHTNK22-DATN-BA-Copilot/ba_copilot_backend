@@ -40,6 +40,7 @@ from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_ai_generated_metadata
 from app.api.v1.file_upload import list_file
+from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -107,6 +108,13 @@ async def generate_design(
         f"User {current_user.email} requested {design_type} generation for {project_name}"
     )
 
+    dependency_result = validate_dependencies(project_id, design_type, db, current_user)
+    if not dependency_result["can_proceed"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
+        )
+
     new_folder = CreateFolderRequest(name=design_type)
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
 
@@ -147,7 +155,7 @@ async def generate_design(
             step="design",
         )
         file_metadata["design_category"] = design_type.split("-")[0]
-        
+
         new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -194,6 +202,7 @@ async def generate_design(
             document=markdown_content,
             design_type=design_type,
             status=new_file.status,
+            recommend_documents=dependency_result["missing_recommended"],
         )
 
     except Exception as e:
