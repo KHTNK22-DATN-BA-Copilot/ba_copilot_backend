@@ -7,7 +7,6 @@ from fastapi import (
     status,
     UploadFile,
     Form,
-
 )
 from fastapi.responses import StreamingResponse
 from io import BytesIO
@@ -40,6 +39,7 @@ from app.utils.srs_utils import (
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.api.v1.file_upload import list_file
+from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,10 +53,16 @@ async def generate_srs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     logger.info(
         f"User {current_user.email} requested SRS generation for {project_name}"
     )
+
+    dependency_result = validate_dependencies(project_id, "srs", db, current_user)
+    if not dependency_result["can_proceed"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot generate SRS. Missing required documents: {dependency_result['missing_required']}",
+        )
 
     new_folder = CreateFolderRequest(
         name="srs",
@@ -76,11 +82,8 @@ async def generate_srs(
         f"Original title: '{project_name}', Unique title chosen: '{unique_title}'"
     )
 
-    file_urls=await list_file(project_id,db,current_user)
-    ai_payload = {
-        "message": description,
-        "storage_paths":file_urls
-    }
+    file_urls = await list_file(project_id, db, current_user)
+    ai_payload = {"message": description, "storage_paths": file_urls}
 
     # Gọi AI service
     generate_at = datetime.now(timezone.utc)
@@ -142,6 +145,7 @@ async def generate_srs(
         input_description=description,
         document=markdown_content,
         status=new_file.status,
+        recommend_documents=dependency_result["missing_recommended"],
     )
 
 
@@ -164,7 +168,6 @@ async def list_SRS(
 
     result = []
     for srs_doc in srs_list:
-
         result.append(
             GetSRSResponse(
                 document_id=str(srs_doc.id),
@@ -294,10 +297,14 @@ async def update_usecase_diagram(
             status_code=403, detail="You don't have permission to access this document."
         )
 
-    folder = (db.query(Folder).filter(
-        Folder.project_id == project_id,
-        Folder.id == srs_doc.folder_id,
-    ).first())
+    folder = (
+        db.query(Folder)
+        .filter(
+            Folder.project_id == project_id,
+            Folder.id == srs_doc.folder_id,
+        )
+        .first()
+    )
 
     if not folder:
         raise HTTPException(
@@ -378,7 +385,7 @@ async def regenerate_srs(
     ai_payload = {
         "message": description,
         "content_id": document_id,
-        "storage_paths": file_urls
+        "storage_paths": file_urls,
     }
     ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
     markdown_content = format_srs_to_markdown(ai_data["response"])
@@ -390,7 +397,7 @@ async def regenerate_srs(
         "message": description,
         "ai_response": ai_data,
     }
-    existing_doc.updated_by=current_user.id
+    existing_doc.updated_by = current_user.id
 
     file_name = f"/{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
     file_like = BytesIO(existing_doc.content.encode("utf-8"))
@@ -405,11 +412,9 @@ async def regenerate_srs(
     existing_doc.storage_path = path_in_bucket
 
     try:
-
         generate_at = datetime.now(timezone.utc)
 
         new_ai_session = Chat_Session(
-            
             content_id=existing_doc.id,
             project_id=project_id,
             user_id=current_user.id,
@@ -419,7 +424,6 @@ async def regenerate_srs(
         )
 
         new_user_session = Chat_Session(
-            
             content_id=existing_doc.id,
             project_id=project_id,
             user_id=current_user.id,

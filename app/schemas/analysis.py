@@ -11,6 +11,7 @@ class AnalysisGenerateResponse(BaseModel):
     document: str
     doc_type: str
     status: str
+    recommend_documents: Optional[List[str]] = None
 
 
 class GetAnalysisResponse(BaseModel):
