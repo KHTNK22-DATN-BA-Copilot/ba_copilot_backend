@@ -28,6 +28,7 @@ from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.file_handling import upload_to_supabase, update_file_from_supabase
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
+from app.utils.metadata_utils import create_ai_generated_metadata
 from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ async def generate_analysis_doc(
     unique_title = get_unique_diagram_name(db, project_name, project_id, doc_type)
     file_path = await upload_to_supabase(
         UploadFile(
-            filename=f"/{current_user.id}/{project_id}/{folder.name}/{unique_title}.md",
+            filename=f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md",
             file=BytesIO(content.encode("utf-8")),
         )
     )
@@ -106,6 +107,15 @@ async def generate_analysis_doc(
         raise HTTPException(500, "Upload failed")
 
     try:
+        # Create structured metadata for AI-generated file
+        file_metadata = create_ai_generated_metadata(
+            doc_type=doc_type,
+            content=content,
+            message=description,
+            ai_response=ai_data,
+            step="analysis",
+        )
+        
         new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -117,11 +127,7 @@ async def generate_analysis_doc(
             content=content,
             file_category="ai gen",
             file_type=doc_type,
-            metadata={
-                "message": description,
-                "ai_response": ai_data,
-                "step": "analysis",
-            },
+            file_metadata=file_metadata,
         )
         db.add(new_file)
         db.flush()
@@ -247,7 +253,7 @@ async def update_analysis_doc(
     path = await update_file_from_supabase(
         doc.storage_path,
         UploadFile(
-            filename=f"/{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
+            filename=f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
             file=BytesIO(content.encode("utf-8")),
         ),
     )
@@ -303,7 +309,7 @@ async def regenerate_analysis_doc(
     path = await update_file_from_supabase(
         doc.storage_path,
         UploadFile(
-            filename=f"/{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
+            filename=f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
             file=BytesIO(content.encode("utf-8")),
         ),
     )

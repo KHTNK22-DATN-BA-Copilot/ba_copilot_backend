@@ -38,6 +38,7 @@ from app.utils.srs_utils import (
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
+from app.utils.metadata_utils import create_ai_generated_metadata
 from app.api.v1.file_upload import list_file
 from app.services.docs_constraint import validate_dependencies
 
@@ -90,12 +91,21 @@ async def generate_srs(
     ai_data = await call_ai_service(settings.ai_service_url_srs, ai_payload)
 
     markdown_content = format_srs_to_markdown(ai_data["response"])
-    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
+    file_name = f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await upload_to_supabase(upload_file)
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+    # Create structured metadata for AI-generated file
+    file_metadata = create_ai_generated_metadata(
+        doc_type="srs",
+        content=markdown_content,
+        message=description,
+        ai_response=ai_data,
+        step="srs",
+    )
 
     new_file = Files(
             project_id=project_id,
@@ -108,10 +118,7 @@ async def generate_srs(
             content=markdown_content,
             file_category="ai gen",
             file_type="srs",
-            metadata={
-                "message": description,
-                "ai_response": ai_data,
-            },
+            file_metadata=file_metadata,
         )
     db.add(new_file)
     db.commit()
@@ -315,7 +322,7 @@ async def update_usecase_diagram(
     srs_doc.content = content
     srs_doc.status = document_status
     srs_doc.updated_by=current_user.id
-    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{srs_doc.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{folder.name}/{srs_doc.name}.md"
     file_like = BytesIO(srs_doc.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(srs_doc.storage_path, upload_file)
@@ -399,7 +406,7 @@ async def regenerate_srs(
     }
     existing_doc.updated_by = current_user.id
 
-    file_name = f"/{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
+    file_name = f"{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
     file_like = BytesIO(existing_doc.content.encode("utf-8"))
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
