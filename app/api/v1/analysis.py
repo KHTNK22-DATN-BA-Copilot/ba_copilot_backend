@@ -29,6 +29,7 @@ from app.utils.file_handling import upload_to_supabase, update_file_from_supabas
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_ai_generated_metadata
+from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -75,6 +76,13 @@ async def generate_analysis_doc(
     if doc_type not in VALID_ANALYSIS_TYPES:
         raise HTTPException(
             status_code=400, detail=f"Invalid doc_type. Must be: {VALID_ANALYSIS_TYPES}"
+        )
+
+    dependency_result = validate_dependencies(project_id, doc_type, db, current_user)
+    if not dependency_result["can_proceed"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot generate {doc_type}. Missing required documents: {dependency_result['missing_required']}",
         )
 
     result = await create_default_folder(
@@ -153,6 +161,7 @@ async def generate_analysis_doc(
             document=content,
             doc_type=doc_type,
             status=new_file.status,
+            recommend_documents=dependency_result["missing_recommended"],
         )
     except Exception as e:
         db.rollback()
