@@ -38,6 +38,15 @@ def _send_email_with_retry(
     Returns:
         bool: True if email sent successfully, False otherwise
     """
+    # Validate configuration
+    if not settings.mailersend_api_key:
+        print("ERROR: MAILERSEND_API_KEY is not configured in .env file")
+        return False
+    
+    if not settings.mailersend_from_email:
+        print("ERROR: MAILERSEND_FROM_EMAIL is not configured in .env file")
+        return False
+    
     ms = _get_mailersend_client()
     
     email = (
@@ -66,7 +75,10 @@ def _send_email_with_retry(
                 
         except MailerSendError as e:
             print(f"MailerSend API error (attempt {attempt + 1}): {e}")
-            print(f"Status Code: {e.status_code}, Details: {e.details}")
+            # Handle different exception attributes safely
+            status_code = getattr(e, 'status_code', 'N/A')
+            details = getattr(e, 'details', str(e))
+            print(f"Status Code: {status_code}, Details: {details}")
             
         except Exception as e:
             print(f"Unexpected error sending email (attempt {attempt + 1}): {e}")

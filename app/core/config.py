@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     mailersend_api_key: Optional[str] = None
     mailersend_from_email: Optional[str] = None
+    #TODO: update this to actual email verification logic 
+    auto_verify_email: bool = True  # Auto-verify emails (skip email sending)
 
     secret_key: str
     algorithm: str = "HS256"
