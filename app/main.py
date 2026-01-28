@@ -26,7 +26,12 @@ from fastapi.middleware.cors import CORSMiddleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="BaCopilot Authentication API", version="1.0.0")
+app = FastAPI(
+    title="BE Service - BA Copilot",
+    description="Backend service that orchestrates FE requests, AI processing, and data persistence for BA Copilot.",
+    version="1.0.0",
+)
+
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
