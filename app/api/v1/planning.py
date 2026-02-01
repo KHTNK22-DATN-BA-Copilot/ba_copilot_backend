@@ -27,7 +27,7 @@ from app.utils.file_handling import upload_to_supabase, update_file_from_supabas
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_ai_generated_metadata
-from app.api.v1.file_upload import list_file
+from app.api.v1.files import list_file
 from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)

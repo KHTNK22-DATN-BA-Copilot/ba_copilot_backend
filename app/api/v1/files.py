@@ -199,7 +199,7 @@ async def export_markdown(
         )
 
     file_stream = BytesIO(doc.content.encode("utf-8"))
-    filename = f"{doc.name.replace(' ', '_')}.md"
+    filename = f"{doc.name.replace(' ', '_')}.{doc.extension}"
 
     return StreamingResponse(
         file_stream,

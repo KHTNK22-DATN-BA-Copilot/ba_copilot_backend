@@ -7,7 +7,6 @@ from app.api.v1 import (
     project_router,
     diagram,
     session,
-    file_upload,
     one_click,
     folder,
     design,
@@ -20,6 +19,8 @@ from app.core.database import engine, Base
 import logging
 import time
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1 import files
 
 
 # Configure logging
@@ -42,7 +43,7 @@ app.include_router(
 )
 app.include_router(diagram.router, prefix="/api/v1/diagram", tags=["diagram_generator"])
 app.include_router(project_router.router, prefix="/api/v1/projects", tags=["project"])
-app.include_router(file_upload.router, prefix="/api/v1/files", tags=["file"])
+app.include_router(files.router, prefix="/api/v1/files", tags=["file"])
 app.include_router(session.router, prefix="/api/v1/sessions", tags=["chat history"])
 app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
 

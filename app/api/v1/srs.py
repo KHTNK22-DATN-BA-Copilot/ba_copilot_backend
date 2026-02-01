@@ -39,7 +39,7 @@ from app.utils.srs_utils import (
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_ai_generated_metadata
-from app.api.v1.file_upload import list_file
+from app.api.v1.files import list_file
 from app.services.docs_constraint import validate_dependencies
 
 logger = logging.getLogger(__name__)
@@ -223,40 +223,40 @@ async def get_srs_document(
     )
 
 
-@router.get("/export/{project_id}/{document_id}", response_class=StreamingResponse)
-async def export_markdown(
-    project_id: str,
-    document_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    file_type = "srs"
-    srs_doc = (
-        db.query(Files)
-        .filter(
-            Files.project_id == project_id,
-            Files.id == document_id,
-            Files.created_by == current_user.id,
-            Files.file_type == file_type,
-        )
-        .first()
-    )
-    if not srs_doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+# @router.get("/export/{project_id}/{document_id}", response_class=StreamingResponse)
+# async def export_markdown(
+#     project_id: str,
+#     document_id: str,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     file_type = "srs"
+#     srs_doc = (
+#         db.query(Files)
+#         .filter(
+#             Files.project_id == project_id,
+#             Files.id == document_id,
+#             Files.created_by == current_user.id,
+#             Files.file_type == file_type,
+#         )
+#         .first()
+#     )
+#     if not srs_doc:
+#         raise HTTPException(status_code=404, detail="Document not found")
 
-    if current_user.id != srs_doc.created_by:
-        raise HTTPException(
-            status_code=403, detail="You don't have permission to access this document."
-        )
+#     if current_user.id != srs_doc.created_by:
+#         raise HTTPException(
+#             status_code=403, detail="You don't have permission to access this document."
+#         )
 
-    file_stream = BytesIO(srs_doc.content.encode("utf-8"))
-    filename = f"{srs_doc.name.replace(' ', '_')}.md"
+#     file_stream = BytesIO(srs_doc.content.encode("utf-8"))
+#     filename = f"{srs_doc.name.replace(' ', '_')}.md"
 
-    return StreamingResponse(
-        file_stream,
-        media_type="text/markdown",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+#     return StreamingResponse(
+#         file_stream,
+#         media_type="text/markdown",
+#         headers={"Content-Disposition": f"attachment; filename={filename}"},
+#     )
 
 
 @router.put("/update/{project_id}/{document_id}", response_model=UpdateSRSResponse)
