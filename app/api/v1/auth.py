@@ -112,15 +112,26 @@ def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
     # Hash password and create user
     hashed_password = get_password_hash(user_data.passwordhash)
     otp = str(secrets.randbelow(1000000)).zfill(6)
-
     hashed_otp = get_otp_hash(otp)
-    send_verify_email_otp(user_data.email, otp)
+    
+    # Check if auto-verify is enabled
+    from app.core.config import settings
+    if settings.auto_verify_email:
+        # Auto-verify email without sending verification email
+        email_verified = True
+        print(f"Auto-verified email for user: {user_data.email}")
+    else:
+        # Send verification email
+        email_verified = False
+        email_sent = send_verify_email_otp(user_data.email, otp)
+        if not email_sent:
+            print(f"WARNING: Failed to send verification email to {user_data.email}. User registered but email not sent.")
 
     db_user = User(
         name=user_data.name,
         email=user_data.email,
         passwordhash=hashed_password,
-        email_verified=False,
+        email_verified=email_verified,
         email_verification_token=hashed_otp,
         email_verification_expiration=datetime.now(timezone.utc) + timedelta(hours=24),
     )
