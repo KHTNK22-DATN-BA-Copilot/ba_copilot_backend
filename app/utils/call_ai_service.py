@@ -37,6 +37,11 @@ async def call_ai_service(
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(ai_service_url, json=payload)
 
+            # try:
+            #     logger.info(f"AI Response json={response.json()}")
+            # except Exception as e:
+            #     logger.error(f"AI Response not json: {response.text}")
+
             # ---------- HTTP LEVEL ----------
             if response.status_code != 200:
                 if 400 <= response.status_code < 500:
@@ -60,20 +65,21 @@ async def call_ai_service(
                     status_code=502,
                     detail="AI response is not valid JSON",
                 )
+            ai_inner_res = data.get("response", {})
 
-            response_content = data.get("response")
+            content = ""
+            if isinstance(ai_inner_res, dict):
+                content = ai_inner_res.get("content", "")
+            elif isinstance(ai_inner_res, str):
+                content = ai_inner_res
 
-            if isinstance(response_content, str):
-                if response_content.strip().lower().startswith("error:"):
-                    raise HTTPException(
-                        status_code=502,
-                        detail=response_content.strip(),
-                    )
+            lowered = content.lower()
 
-            if response_content is None:
+            if "error generating document" in lowered or "error code:" in lowered:
+                logger.error(f"AI logical error (wrapped 200): {content}")
                 raise HTTPException(
                     status_code=502,
-                    detail="AI response missing 'response' field",
+                    detail=content
                 )
 
             return data
