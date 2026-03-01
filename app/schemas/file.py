@@ -15,6 +15,7 @@ class GetFileResponse(BaseModel):
     content: Optional[str] = Field(None, description="Content of the file, if text or markdown")
     file_category: str = Field(..., description="Categorizing the file source (ai gen, user upload, etc.)")
     file_type: str = Field(..., description="Technical file type (srs, pdf, wireframe, markdown)")
+    file_size: int=Field(..., description="File size")
     file_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="File metadata (AI params, file metadata, etc.)")
     status: str = Field(..., description="File status (active, etc.)")
     created_at: datetime = Field(..., description="Timestamp when the file was created")
