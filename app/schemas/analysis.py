@@ -12,6 +12,7 @@ class AnalysisGenerateResponse(BaseModel):
     doc_type: str
     status: str
     recommend_documents: Optional[List[str]] = None
+    file_size_kb:float
 
 
 class GetAnalysisResponse(BaseModel):
@@ -21,6 +22,7 @@ class GetAnalysisResponse(BaseModel):
     doc_type: str
     status: str
     updated_at: datetime
+    file_size_kb:float
 
 
 class UpdateAnalysisResponse(BaseModel):
@@ -29,6 +31,7 @@ class UpdateAnalysisResponse(BaseModel):
     content: str
     status: str
     updated_at: datetime
+    file_size_kb: float
 
 
 class AnalysisListResponse(BaseModel):

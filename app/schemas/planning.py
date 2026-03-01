@@ -12,6 +12,7 @@ class PlanningGenerateResponse(BaseModel):
     doc_type: str
     status: str
     recommend_documents: Optional[List[str]] = None
+    file_size_kb: float = Field(..., description="File size")
 
 
 class GetPlanningResponse(BaseModel):
@@ -21,6 +22,7 @@ class GetPlanningResponse(BaseModel):
     doc_type: str
     status: str
     updated_at: datetime
+    file_size_kb: float
 
 
 class UpdatePlanningResponse(BaseModel):
@@ -29,6 +31,7 @@ class UpdatePlanningResponse(BaseModel):
     content: str
     status: str
     updated_at: datetime
+    file_size_kb: float
 
 
 class PlanningListResponse(BaseModel):

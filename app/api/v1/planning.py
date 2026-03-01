@@ -108,10 +108,12 @@ async def generate_planning_doc(
 
     # 3. Upload Supabase
     unique_title = get_unique_diagram_name(db, project_name, project_id, doc_type)
+    upload_file = BytesIO(content.encode("utf-8"))
+    file_size_kb = round(len(upload_file.getvalue()) / 1024, 2)
     file_path = await upload_to_supabase(
         UploadFile(
             filename=f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md",
-            file=BytesIO(content.encode("utf-8")),
+            file=upload_file,
         )
     )
     if not file_path:
@@ -127,7 +129,7 @@ async def generate_planning_doc(
             ai_response=ai_data,
             step="planning",
         )
-        
+
         new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -140,6 +142,7 @@ async def generate_planning_doc(
             file_category="ai gen",
             file_type=doc_type,
             file_metadata=file_metadata,
+            file_size=file_size_kb
         )
         db.add(new_file)
         db.flush()
@@ -176,6 +179,7 @@ async def generate_planning_doc(
             doc_type=doc_type,
             status=new_file.status,
             recommend_documents=dependency_result["missing_recommended"],
+            file_size_kb=new_file.file_size,
         )
     except Exception as e:
         db.rollback()
@@ -206,6 +210,7 @@ async def list_planning_docs(
                 doc_type=d.file_type,
                 status=d.status,
                 updated_at=d.updated_at,
+                file_size_kb=d.file_size,
             )
             for d in query.all()
         ]
@@ -238,6 +243,7 @@ async def get_planning_doc(
         doc_type=doc.file_type,
         status=doc.status,
         updated_at=doc.updated_at,
+        file_size_kb=doc.file_size,
     )
 
 
@@ -263,18 +269,22 @@ async def update_planning_doc(
     if not doc:
         raise HTTPException(404, "Not found")
 
+    doc.content = content
+    doc.status = status
+    doc.updated_by = current_user.id
+
     folder = db.query(Folder).filter(Folder.id == doc.folder_id).first()
+    upload_file = BytesIO(doc.content.encode("utf-8"))
+    file_size_kb = round(len(upload_file.getvalue()) / 1024, 2)
     path = await update_file_from_supabase(
         doc.storage_path,
         UploadFile(
             filename=f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
-            file=BytesIO(content.encode("utf-8")),
+            file=upload_file,
         ),
     )
 
-    doc.content = content
-    doc.status = status
-    doc.updated_by = current_user.id
+    doc.file_size=file_size_kb
     if path:
         doc.storage_path = path
     db.commit()
@@ -285,6 +295,7 @@ async def update_planning_doc(
         content=content,
         status=status,
         updated_at=doc.updated_at,
+        file_size_kb=doc.file_size
     )
 
 
@@ -324,16 +335,19 @@ async def regenerate_planning_doc(
     content = format_response(ai_inner)
 
     folder = db.query(Folder).filter(Folder.id == doc.folder_id).first()
+    upload_file = BytesIO(content.encode("utf-8"))
+    file_size_kb = round(len(upload_file.getvalue()) / 1024, 2)
     path = await update_file_from_supabase(
         doc.storage_path,
         UploadFile(
             filename=f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md",
-            file=BytesIO(content.encode("utf-8")),
+            file=upload_file,
         ),
     )
 
     try:
         doc.content = content
+        doc.file_size=file_size_kb
         doc.updated_by = current_user.id
         doc.storage_path = path
         doc.file_metadata = {
@@ -372,6 +386,7 @@ async def regenerate_planning_doc(
             document=content,
             doc_type=doc.file_type,
             status=doc.status,
+            file_size_kb=doc.file_size,
         )
     except Exception as e:
         db.rollback()

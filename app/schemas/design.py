@@ -20,6 +20,7 @@ class DesignGenerateResponse(BaseModel):
     design_type: str = Field(..., description="Type of design (e.g., hld-arch, lld-db)")
     status: str = Field(..., description="Generation status")
     recommend_documents: Optional[List[str]] = None
+    file_size_kb:float=Field(...,description="File size")
 
 
 class GetDesignResponse(BaseModel):
@@ -29,6 +30,7 @@ class GetDesignResponse(BaseModel):
     design_type: str
     status: str
     updated_at: datetime
+    file_size_kb: float
 
 
 class UpdateDesignResponse(BaseModel):
@@ -37,7 +39,7 @@ class UpdateDesignResponse(BaseModel):
     content: str
     status: str
     updated_at: datetime
-
+    file_size_kb: float
 
 class DesignListResponse(BaseModel):
     documents: List[GetDesignResponse] = Field(

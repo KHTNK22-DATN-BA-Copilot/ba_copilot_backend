@@ -137,8 +137,12 @@ async def generate_design(
 
     # 5. Upload lên Supabase
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
-    file_like = BytesIO(markdown_content.encode("utf-8"))
-    upload_file = UploadFile(filename=file_name, file=file_like)
+    upload_file = BytesIO(markdown_content.encode("utf-8"))
+    file_size_kb = round(len(upload_file.getvalue()) / 1024, 2)
+
+    upload_file = UploadFile(
+        filename=file_name, file=BytesIO(markdown_content.encode("utf-8"))
+    )
     path_in_bucket = await upload_to_supabase(upload_file)
 
     if path_in_bucket is None:
@@ -155,7 +159,7 @@ async def generate_design(
             step="design",
         )
         file_metadata["design_category"] = design_type.split("-")[0]
-        
+
         new_file = Files(
             project_id=project_id,
             folder_id=folder.id,
@@ -168,6 +172,7 @@ async def generate_design(
             file_category="ai gen",
             file_type=design_type,
             file_metadata=file_metadata,
+            file_size=file_size_kb,
         )
         db.add(new_file)
         db.flush()
@@ -203,6 +208,7 @@ async def generate_design(
             design_type=design_type,
             status=new_file.status,
             recommend_documents=dependency_result["missing_recommended"],
+            file_size_kb=new_file.file_size
         )
 
     except Exception as e:
@@ -242,6 +248,7 @@ async def list_designs(
                 design_type=doc.file_type,
                 status=doc.status,
                 updated_at=doc.updated_at,
+                file_size_kb=doc.file_size,
             )
         )
 
@@ -276,6 +283,7 @@ async def get_design_document(
         design_type=doc.file_type,
         status=doc.status,
         updated_at=doc.updated_at,
+        file_size_kb=doc.file_size,
     )
 
 
@@ -347,11 +355,15 @@ async def update_design_document(
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
     file_like = BytesIO(doc.content.encode("utf-8"))
+   
+    file_size_kb = round(len(file_like.getvalue()) / 1024, 2)
     upload_file = UploadFile(filename=file_name, file=file_like)
 
     path_in_bucket = await update_file_from_supabase(doc.storage_path, upload_file)
     if path_in_bucket:
         doc.storage_path = path_in_bucket
+
+    doc.file_size=file_size_kb
 
     db.commit()
     db.refresh(doc)
@@ -362,6 +374,7 @@ async def update_design_document(
         content=content,
         status=document_status,
         updated_at=doc.updated_at,
+        file_size_kb=doc.file_size,
     )
 
 
@@ -412,6 +425,7 @@ async def regenerate_design(
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{existing_doc.name}.md"
     file_like = BytesIO(markdown_content.encode("utf-8"))
+    file_size_kb = round(len(file_like.getvalue()) / 1024, 2)
     upload_file = UploadFile(filename=file_name, file=file_like)
     path_in_bucket = await update_file_from_supabase(
         existing_doc.storage_path, upload_file
@@ -431,7 +445,8 @@ async def regenerate_design(
         }
         existing_doc.updated_by = current_user.id
         existing_doc.storage_path = path_in_bucket
-
+        existing_doc.file_size=file_size_kb
+        
         db.flush()
 
         new_ai_session = Chat_Session(
@@ -464,6 +479,7 @@ async def regenerate_design(
             document=markdown_content,
             design_type=design_type,
             status=existing_doc.status,
+            file_size_kb=existing_doc.file_size,
         )
 
     except Exception as e:
