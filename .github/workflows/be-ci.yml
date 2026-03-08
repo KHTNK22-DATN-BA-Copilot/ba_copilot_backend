@@ -1,4 +1,4 @@
-name: BE CI
+name: BE CI/CD
 
 on:
   push:
@@ -8,80 +8,81 @@ on:
     branches:
       - main
 
-  jobs:
-    # ========== CI: Build ==========
-    build:
-      runs-on: ["self-hosted", "Linux", "X64"]
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
+jobs:
+  # ========== CI: Build ==========
+  build:
+    runs-on: ["self-hosted", "Linux", "X64"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-        - name: Setup Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: 3.11
-            cache: 'pip'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: 'pip'
 
-        - name: Install dependencies
-          run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-        - name: Syntax check
-          run: ruff check .
+      - name: Syntax check
+        run: ruff check .
+  
+  # ========== CI: Test ==========
+  # test:
+  #   runs-on: ["self-hosted", "Linux", "X64"]
+  #   needs: build
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Setup Python
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: 3.11
+  #         cache: 'pip'
+  #
+  #     - name: Install dependencies
+  #       run: pip install -r requirements.txt
+  #
+  #     - name: Run tests
+  #       run: pytest tests/
+  
+  # ========== CD: Deploy to VPS ==========
+  deploy:
+    runs-on: ["self-hosted", "Linux", "X64"]
+    needs: test
 
-    # ========== CI: Test ==========
-    # test:
-    #   runs-on: ["self-hosted", "Linux", "X64"]
-    #   needs: build
-    #   steps:
-    #     - name: Checkout code
-    #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    #     - name: Setup Python
-    #       uses: actions/setup-python@v4
-    #       with:
-    #         python-version: 3.11
-    #         cache: 'pip'
+      - name: Pull latest code to VPS
+        run: |
+          cd /home/bacopilot/bacopilot/ba_copilot_backend  
+          git pull origin main
 
-    #     - name: Install dependencies
-    #       run: pip install -r requirements.txt
+      - name: Stop be container
+        run: docker compose stop backend || true
+        working-directory: /home/bacopilot/bacopilot
 
-    #     - name: Run tests
-    #       run: pytest tests/
+      - name: Remove be container
+        run: docker compose rm -f backend || true
+        working-directory: /home/bacopilot/bacopilot
 
-    # ========== CD: Deploy to VPS ==========
-    deploy:
-      runs-on: ["self-hosted", "Linux", "X64"]
-      needs: test
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
+      - name: Build be image
+        run: docker compose build --no-cache backend
+        working-directory: /home/bacopilot/bacopilot
 
-        - name: Pull latest code to VPS
-          run: |
-            cd /home/bacopilot/bacopilot/ba_copilot_backend  
-            git pull origin main
+      - name: Start be container
+        run: docker compose up -d backend
+        working-directory: /home/bacopilot/bacopilot
 
-        - name: Stop be container
-          run: docker compose stop backend || true
-          working-directory: /home/bacopilot/bacopilot
+      - name: Cleanup old Docker images
+        run: docker image prune -f
 
-        - name: Remove be container
-          run: docker compose rm -f backend || true
-          working-directory: /home/bacopilot/bacopilot
-
-        - name: Build be image
-          run: docker compose build --no-cache backend
-          working-directory: /home/bacopilot/bacopilot
-
-        - name: Start be container
-          run: docker compose up -d backend
-          working-directory: /home/bacopilot/bacopilot
-
-        - name: Cleanup old Docker images
-          run: docker image prune -f
-
-        - name: Health check
-          run: |
-            echo "Waiting for ai container to start..."
-            sleep 10
-            docker ps | grep ba-copilot-ai || echo "Warning: AI container may not be running"
+      - name: Health check
+        run: |
+          echo "Waiting for backend container to start..."
+          sleep 10
+          docker ps | grep ba-copilot-backend || echo "Warning: Backend container may not be running"
