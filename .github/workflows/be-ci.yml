@@ -51,7 +51,7 @@ jobs:
   # ========== CD: Deploy to VPS ==========
   deploy:
     runs-on: ["self-hosted", "Linux", "X64"]
-    needs: test
+    needs: build
 
     steps:
       - name: Checkout code
