@@ -47,6 +47,7 @@ router = APIRouter()
 
 # Danh sách các design_type hợp lệ
 VALID_DESIGN_TYPES = [
+    "srs",
     "hld-arch",
     "hld-cloud",
     "hld-tech",
@@ -57,6 +58,7 @@ VALID_DESIGN_TYPES = [
     "uiux-wireframe",
     "uiux-mockup",
     "uiux-prototype",
+    "rtm",
 ]
 
 
