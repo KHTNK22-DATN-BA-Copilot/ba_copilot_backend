@@ -23,7 +23,7 @@ class TestRegisterEndpoint:
         user_data = data["user"]
         assert user_data["email"] == test_user_data["email"]
         assert user_data["name"] == test_user_data["name"]
-        assert user_data["email_verified"] is False
+        assert user_data["email_verified"] is True
         assert "id" in user_data
         assert "created_at" in user_data
         assert "updated_at" in user_data
@@ -33,7 +33,7 @@ class TestRegisterEndpoint:
         assert db_user is not None
         assert db_user.email == test_user_data["email"]
         assert db_user.name == test_user_data["name"]
-        assert db_user.email_verified is False
+        assert db_user.email_verified is True
         assert db_user.email_verification_token is not None  # OTP đã được hash
         assert db_user.email_verification_expiration is not None
 

@@ -1,12 +1,29 @@
-from sqlalchemy import Column, Numeric, String, Integer, DateTime, ForeignKey, Text
+import uuid
+from sqlalchemy import (
+    Column,
+    Numeric,
+    String,
+    Integer,
+    DateTime,
+    ForeignKey,
+    Text,
+    JSON,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from app.core.database import Base
 
+
 class Files(Base):
     __tablename__ = "files"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    # Dùng .with_variant() để báo: Dùng UUID cho Postgres, nhưng dùng String(36) nếu chạy bằng SQLite
+    # Dùng default=uuid.uuid4 để Python sinh ra UUID chuẩn, hoạt động trên mọi DB
+    id = Column(
+        UUID(as_uuid=True).with_variant(String(36), "sqlite"),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -14,12 +31,19 @@ class Files(Base):
     name = Column(String(255), nullable=False)
     extension = Column(String(32), nullable=True)
     storage_path = Column(String(512), nullable=True)
-    storage_md_path=Column(String(512),nullable=True)
+    storage_md_path = Column(String(512), nullable=True)
     content = Column(Text, nullable=True)
     file_category = Column(String(50), nullable=False)
     file_type = Column(String(50), nullable=False)
     file_size = Column(Numeric(10, 2), nullable=True)
     status = Column(String(32), nullable=False, default="active")
-    file_metadata = Column("metadata", JSONB, default=dict)
+
+    # Tương tự với JSONB, dùng JSON chuẩn nếu chạy bằng SQLite
+    file_metadata = Column(
+        "metadata", JSONB().with_variant(JSON(), "sqlite"), default=dict
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

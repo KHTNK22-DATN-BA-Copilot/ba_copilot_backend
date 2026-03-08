@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from datetime import datetime, timedelta
 from app.core.database import Base
 
 
@@ -16,7 +17,8 @@ class Project(Base):
     team_size = Column(Integer, default=1)
     settings = Column(JSON, default={}, nullable=False)
     due_date = Column(
-        DateTime(timezone=True), server_default=text("(now() + interval '30 days')")
+        DateTime(timezone=True),
+        default=lambda: datetime.utcnow() + timedelta(days=30)
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
