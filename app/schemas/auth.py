@@ -27,3 +27,6 @@ class TokenResponse(BaseModel):
 
 class LogoutResponse(BaseModel):
     message: str
+
+class CredentialsRequest(BaseModel):
+    code: str
