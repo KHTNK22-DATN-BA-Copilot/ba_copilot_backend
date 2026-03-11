@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from app.api.v1 import (
     auth,
+    oauth,
     user,
     wireframe,
     srs,
@@ -56,6 +57,9 @@ app.include_router(
     design_ws.router, prefix="/api/v1", tags=["design step websocket"]
 )
 app.include_router(analysis_ws.router, prefix="/api/v1", tags=["analysis step websocket"])
+
+# Oauth routes
+app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
 
 # Configure CORS
 app.add_middleware(

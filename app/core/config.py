@@ -68,4 +68,9 @@ class Settings(BaseSettings):
     # Metadata extraction service
     ai_service_url_metadata_extraction: str = "http://ai:8000/api/v1/metadata/extract"
 
+    # Google OAuth2 config
+    google_client_id: str
+    google_client_secret: str
+    google_redirect_uri: str
+
 settings = Settings()
