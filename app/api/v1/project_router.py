@@ -363,6 +363,7 @@ async def get_project_tree(
             content=file.content,
             file_category=file.file_category,
             file_type=file.file_type,
+            file_size=file.file_size,
             # Use 'metadata' from DB, default to {} if None
             file_metadata=file.file_metadata if file.file_metadata else {}, 
             status=file.status,

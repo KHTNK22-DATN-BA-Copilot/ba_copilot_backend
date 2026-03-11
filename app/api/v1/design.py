@@ -357,7 +357,7 @@ async def update_design_document(
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
     file_like = BytesIO(doc.content.encode("utf-8"))
-   
+
     file_size_kb = round(len(file_like.getvalue()) / 1024, 2)
     upload_file = UploadFile(filename=file_name, file=file_like)
 
@@ -366,6 +366,21 @@ async def update_design_document(
         doc.storage_path = path_in_bucket
 
     doc.file_size=file_size_kb
+
+    chat_session = (
+        db.query(Chat_Session)
+        .filter(
+            Chat_Session.project_id == project_id,
+            Chat_Session.content_id == doc.id,
+            Chat_Session.content_type == doc.file_type,
+            Chat_Session.role == "ai",
+        )
+        .order_by(Chat_Session.created_at.desc())
+        .first()
+    )
+
+    if chat_session:
+        chat_session.message = content
 
     db.commit()
     db.refresh(doc)
