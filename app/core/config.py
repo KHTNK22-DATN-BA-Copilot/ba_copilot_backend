@@ -12,12 +12,12 @@ class Settings(BaseSettings):
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "bacopilot_db"
-    db_user: str = "postgres"
+    db_user: str = "bacopilot_user"
     db_password: str
 
     mailersend_api_key: Optional[str] = None
     mailersend_from_email: Optional[str] = None
-    #TODO: update this to actual email verification logic 
+    # TODO: update this to actual email verification logic
     auto_verify_email: bool = True  # Auto-verify emails (skip email sending)
 
     secret_key: str
@@ -59,12 +59,13 @@ class Settings(BaseSettings):
     ai_service_url_uiux_wireframe: str
     ai_service_url_uiux_mockup: str
     ai_service_url_uiux_prototype: str
+    ai_service_url_rtm: str
 
     ai_service_url_feasibility_study: str
     ai_service_url_cost_benefit_analysis: str
     ai_service_url_risk_register: str
     ai_service_url_compliance: str
-    
+
     # Metadata extraction service
     ai_service_url_metadata_extraction: str = "http://ai:8000/api/v1/metadata/extract"
 

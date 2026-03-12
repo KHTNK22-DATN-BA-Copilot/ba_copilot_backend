@@ -252,7 +252,6 @@ async def update_planning_doc(
     project_id: str,
     document_id: str,
     content: str = Form(...),
-    status: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -270,7 +269,6 @@ async def update_planning_doc(
         raise HTTPException(404, "Not found")
 
     doc.content = content
-    doc.status = status
     doc.updated_by = current_user.id
 
     folder = db.query(Folder).filter(Folder.id == doc.folder_id).first()
@@ -287,13 +285,28 @@ async def update_planning_doc(
     doc.file_size=file_size_kb
     if path:
         doc.storage_path = path
+
+    chat_session = (
+        db.query(Chat_Session)
+        .filter(
+            Chat_Session.project_id == project_id,
+            Chat_Session.content_id == doc.id,
+            Chat_Session.content_type == doc.file_type,
+            Chat_Session.role == "ai",
+        )
+        .order_by(Chat_Session.created_at.desc())
+        .first()
+    )
+
+    if chat_session:
+        chat_session.message = content
+        
     db.commit()
     db.refresh(doc)
     return UpdatePlanningResponse(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
-        status=status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size
     )

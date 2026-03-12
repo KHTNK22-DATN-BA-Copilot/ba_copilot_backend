@@ -47,6 +47,7 @@ router = APIRouter()
 
 # Danh sách các design_type hợp lệ
 VALID_DESIGN_TYPES = [
+    "srs",
     "hld-arch",
     "hld-cloud",
     "hld-tech",
@@ -57,6 +58,7 @@ VALID_DESIGN_TYPES = [
     "uiux-wireframe",
     "uiux-mockup",
     "uiux-prototype",
+    "rtm",
 ]
 
 
@@ -323,13 +325,9 @@ async def update_design_document(
     project_id: str,
     document_id: str,
     content: str = Form(...),
-    document_status: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    valid_status = ["generated", "draft", "published", "archived"]
-    if document_status not in valid_status:
-        raise HTTPException(status_code=400, detail="Invalid status")
 
     doc = (
         db.query(Files)
@@ -350,12 +348,12 @@ async def update_design_document(
         raise HTTPException(status_code=404, detail="Folder not found")
 
     doc.content = content
-    doc.status = document_status
+   
     doc.updated_by = current_user.id
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
     file_like = BytesIO(doc.content.encode("utf-8"))
-   
+
     file_size_kb = round(len(file_like.getvalue()) / 1024, 2)
     upload_file = UploadFile(filename=file_name, file=file_like)
 
@@ -365,6 +363,21 @@ async def update_design_document(
 
     doc.file_size=file_size_kb
 
+    chat_session = (
+        db.query(Chat_Session)
+        .filter(
+            Chat_Session.project_id == project_id,
+            Chat_Session.content_id == doc.id,
+            Chat_Session.content_type == doc.file_type,
+            Chat_Session.role == "ai",
+        )
+        .order_by(Chat_Session.created_at.desc())
+        .first()
+    )
+
+    if chat_session:
+        chat_session.message = content
+
     db.commit()
     db.refresh(doc)
 
@@ -372,7 +385,6 @@ async def update_design_document(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
-        status=document_status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
     )
