@@ -325,13 +325,9 @@ async def update_design_document(
     project_id: str,
     document_id: str,
     content: str = Form(...),
-    document_status: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    valid_status = ["generated", "draft", "published", "archived"]
-    if document_status not in valid_status:
-        raise HTTPException(status_code=400, detail="Invalid status")
 
     doc = (
         db.query(Files)
@@ -352,7 +348,7 @@ async def update_design_document(
         raise HTTPException(status_code=404, detail="Folder not found")
 
     doc.content = content
-    doc.status = document_status
+   
     doc.updated_by = current_user.id
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
@@ -389,7 +385,6 @@ async def update_design_document(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
-        status=document_status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
     )

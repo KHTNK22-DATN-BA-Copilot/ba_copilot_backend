@@ -29,7 +29,6 @@ class UpdateAnalysisResponse(BaseModel):
     document_id: str
     project_name: str
     content: str
-    status: str
     updated_at: datetime
     file_size_kb: float
 
