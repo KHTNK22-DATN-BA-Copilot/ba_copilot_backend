@@ -35,6 +35,8 @@ from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.file_handling import (
     upload_to_supabase,
     update_file_from_supabase,
+    extract_html_css_from_content,
+    merge_html_css
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
@@ -100,6 +102,7 @@ async def generate_design(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    
     if design_type not in VALID_DESIGN_TYPES:
         raise HTTPException(
             status_code=400,
@@ -110,45 +113,49 @@ async def generate_design(
         f"User {current_user.email} requested {design_type} generation for {project_name}"
     )
 
-    dependency_result = validate_dependencies(project_id, design_type, db, current_user)
-    if not dependency_result["can_proceed"]:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
-        )
+    # dependency_result = validate_dependencies(project_id, design_type, db, current_user)
+    # if not dependency_result["can_proceed"]:
+    #     raise HTTPException(
+    #         status_code=422,
+    #         detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
+    #     )
+
 
     new_folder = CreateFolderRequest(name=design_type)
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
-
     if result.error:
         raise HTTPException(status_code=500, detail="Failed to create folder storage")
     folder = result.folder
 
     unique_title = get_unique_diagram_name(db, project_name, project_id, design_type)
-
     file_urls = await list_file(project_id, db, current_user)
     ai_payload = {"message": description, "storage_paths": file_urls}
-
     ai_url = get_ai_endpoint(design_type)
+
     generate_at = datetime.now(timezone.utc)
 
     ai_data = await call_ai_service(ai_url, ai_payload)
-
     ai_inner_response = ai_data.get("response", {})
-    markdown_content = format_design_response(ai_inner_response)
+    html_content, css_content = extract_html_css_from_content(
+        json.dumps(ai_inner_response)
+    )
+    if html_content:
+        markdown_content = merge_html_css(html_content, css_content or "")
+    else:
+        markdown_content = format_design_response(ai_inner_response)
 
     # 5. Upload lên Supabase
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
     upload_file = BytesIO(markdown_content.encode("utf-8"))
     file_size_kb = round(len(upload_file.getvalue()) / 1024, 2)
-
     upload_file = UploadFile(
         filename=file_name, file=BytesIO(markdown_content.encode("utf-8"))
     )
     path_in_bucket = await upload_to_supabase(upload_file)
-
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+    
 
     # 6. Transaction DB
     try:
@@ -209,7 +216,7 @@ async def generate_design(
             document=markdown_content,
             design_type=design_type,
             status=new_file.status,
-            recommend_documents=dependency_result["missing_recommended"],
+            recommend_documents=[],
             file_size_kb=new_file.file_size
         )
 

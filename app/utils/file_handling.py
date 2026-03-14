@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import List
+from typing import List, Tuple
 import uuid
 from fastapi import UploadFile
 from app.utils.supabase_client import supabase
@@ -10,6 +10,7 @@ import io
 import tempfile
 import unicodedata
 import re
+import json as json_lib
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,37 @@ async def extract_text_from_file(file: UploadFile) -> str:
         content = f"[Unsupported file type: {file.filename}]"
 
     return content
+
+
+def extract_html_css_from_content(content: str) -> Tuple[str, str]:
+    """Extract HTML and CSS from content"""
+    html_content = ""
+    css_content = None
+
+    try:
+        parsed_json = json_lib.loads(content)
+
+        if isinstance(parsed_json, dict) and "html" in parsed_json:
+            html_content = parsed_json.get("html", "")
+            css_content = parsed_json.get("css", "")
+
+    except Exception:
+        pass
+
+    return html_content.strip(), css_content.strip() if css_content else None
+
+
+def merge_html_css(html: str, css: str) -> str:
+    """Merge HTML and CSS into one content with markers"""
+    return f"""
+            <!--HTML_START-->
+            {html}
+            <!--HTML_END-->
+
+            <!--CSS_START-->
+            {css}
+            <!--CSS_END-->
+            """.strip()
 
 
 def has_extension(filename: str) -> bool:
