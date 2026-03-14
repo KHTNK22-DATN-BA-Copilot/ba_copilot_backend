@@ -186,7 +186,6 @@ async def export_markdown(
         db.query(Files)
         .filter(
             Files.id == document_id,
-            Files.created_by == current_user.id,
         )
         .first()
     )
