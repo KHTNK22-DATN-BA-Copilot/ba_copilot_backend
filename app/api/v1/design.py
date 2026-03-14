@@ -102,7 +102,7 @@ async def generate_design(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    
+
     if design_type not in VALID_DESIGN_TYPES:
         raise HTTPException(
             status_code=400,
@@ -113,13 +113,12 @@ async def generate_design(
         f"User {current_user.email} requested {design_type} generation for {project_name}"
     )
 
-    # dependency_result = validate_dependencies(project_id, design_type, db, current_user)
-    # if not dependency_result["can_proceed"]:
-    #     raise HTTPException(
-    #         status_code=422,
-    #         detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
-    #     )
-
+    dependency_result = validate_dependencies(project_id, design_type, db, current_user)
+    if not dependency_result["can_proceed"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
+        )
 
     new_folder = CreateFolderRequest(name=design_type)
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
@@ -154,8 +153,6 @@ async def generate_design(
     path_in_bucket = await upload_to_supabase(upload_file)
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
-
-    
 
     # 6. Transaction DB
     try:
@@ -216,8 +213,8 @@ async def generate_design(
             document=markdown_content,
             design_type=design_type,
             status=new_file.status,
-            recommend_documents=[],
-            file_size_kb=new_file.file_size
+            recommend_documents=dependency_result["missing_recommended"],
+            file_size_kb=new_file.file_size,
         )
 
     except Exception as e:
