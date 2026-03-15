@@ -36,7 +36,7 @@ from app.utils.file_handling import (
     upload_to_supabase,
     update_file_from_supabase,
     extract_html_css_from_content,
-    merge_html_css
+    merge_html_css,
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
@@ -201,7 +201,7 @@ async def generate_design(
             message=description,
         )
 
-        db.add_all([new_ai_session, new_user_session])
+        db.add_all([new_user_session, new_ai_session])
         db.commit()
         db.refresh(new_file)
 
@@ -352,7 +352,7 @@ async def update_design_document(
         raise HTTPException(status_code=404, detail="Folder not found")
 
     doc.content = content
-   
+
     doc.updated_by = current_user.id
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
@@ -365,7 +365,7 @@ async def update_design_document(
     if path_in_bucket:
         doc.storage_path = path_in_bucket
 
-    doc.file_size=file_size_kb
+    doc.file_size = file_size_kb
 
     chat_session = (
         db.query(Chat_Session)
@@ -461,8 +461,8 @@ async def regenerate_design(
         }
         existing_doc.updated_by = current_user.id
         existing_doc.storage_path = path_in_bucket
-        existing_doc.file_size=file_size_kb
-        
+        existing_doc.file_size = file_size_kb
+
         db.flush()
 
         new_ai_session = Chat_Session(
@@ -483,7 +483,7 @@ async def regenerate_design(
             message=description,
         )
 
-        db.add_all([new_ai_session, new_user_session])
+        db.add_all([new_user_session, new_ai_session])
         db.commit()
         db.refresh(existing_doc)
 
