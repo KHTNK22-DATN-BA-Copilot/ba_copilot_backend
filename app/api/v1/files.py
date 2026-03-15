@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.file import Files
 from app.models.user import User
-from app.utils.file_handling import has_extension, upload_to_supabase
+from app.utils.file_handling import has_extension, upload_to_supabase, delete_file_from_supabase
 from app.schemas.folder import CreateFolderRequest
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
@@ -65,30 +65,25 @@ async def upload(
                 continue
 
             suffix = os.path.splitext(file.filename)[1]
+
             file_name = os.path.splitext(file.filename)[0]
             unique_title = get_unique_diagram_name(db, file_name, project_id, suffix)
 
-            # ================================================================
-            # 1) Tạo file tạm để convert → markdown
-            # ================================================================
+            content = await file.read()
+            file_size_bytes = len(content)
+            file_size_kb = round(file_size_bytes / 1024, 2)
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                content = await file.read()
                 tmp.write(content)
                 tmp_path = tmp.name
 
-            # ================================================================
-            # 2) Upload bản RAW lên Supabase
-            # ================================================================
             file.file.seek(0)
-            raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}.{suffix}"
+            raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}{suffix}"
             raw_url = await upload_to_supabase(file,raw_filename)
 
             if not raw_url:
                 raise Exception(f"Failed to upload raw file {file.filename}")
 
-            # ================================================================
-            # 3) Convert RAW → Markdown
-            # ================================================================
             try:
                 md = MarkItDown(enable_plugins=False)
                 result = md.convert(tmp_path)
@@ -98,9 +93,6 @@ async def upload(
             finally:
                 os.remove(tmp_path)
 
-            # ================================================================
-            # 4) Upload file .md lên Supabase
-            # ================================================================
             md_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}.md"
 
             with tempfile.NamedTemporaryFile("w", delete=False, suffix=".md") as md_tmp:
@@ -114,12 +106,9 @@ async def upload(
             if not md_url:
                 raise Exception(f"Failed to upload md file for {file.filename}")
 
-            # ================================================================
-            # 5) Call AI service to extract metadata from markdown
-            # ================================================================
             file_metadata = {}
             try:
-                # Generate a temporary ID for the document (will be replaced by actual UUID)
+
                 temp_doc_id = f"temp-{unique_title}"
 
                 metadata_payload = {
@@ -131,11 +120,10 @@ async def upload(
                 metadata_response = await call_ai_service(
                     ai_service_url=settings.ai_service_url_metadata_extraction,
                     payload=metadata_payload,
-                    retries=2,  # Fewer retries for metadata extraction
-                    read_timeout=120  # 2 minutes timeout
+                    retries=2,  
+                    read_timeout=120  
                 )
 
-                # Parse metadata response using utility function
                 if metadata_response and "response" in metadata_response:
                     file_metadata = create_user_upload_metadata(
                         metadata_response=metadata_response,
@@ -144,7 +132,7 @@ async def upload(
                     )
                     logger.info(f"Metadata extracted for {file.filename}")
             except Exception as me:
-                # Log error but don't fail the upload
+
                 logger.warning(f"Metadata extraction failed for {file.filename}: {str(me)}")
                 file_metadata = {
                     "extraction_status": "failed",
@@ -157,16 +145,18 @@ async def upload(
                 created_by=current_user.id,
                 updated_by=current_user.id,
                 name=file.filename,
+                content=content,
+                extension=suffix,
                 storage_path=raw_url,
                 storage_md_path=md_url,
                 file_category="user upload",
+                file_size=file_size_kb,
                 file_type=suffix,
                 file_metadata=file_metadata,
             )
             db.add(raw_record)
             db.commit()
 
-        # Chỉ trả về status code 200, không trả về dữ liệu
         return {"status": "ok"}
 
     except Exception as e:
@@ -181,7 +171,7 @@ async def export_markdown(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    
+
     doc = (
         db.query(Files)
         .filter(
@@ -205,3 +195,36 @@ async def export_markdown(
         media_type="text/markdown",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.delete("/{file_id}", status_code=200)
+async def delete_file(
+    file_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+
+        file = (
+            db.query(Files)
+            .filter(Files.id == file_id, Files.created_by == current_user.id)
+            .first()
+        )
+
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        if file.storage_path:
+            await delete_file_from_supabase(file.storage_path)
+
+        if file.storage_md_path:
+            await delete_file_from_supabase(file.storage_md_path)
+
+        db.delete(file)
+        db.commit()
+
+        return {"status": "deleted", "file_id": file_id}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
