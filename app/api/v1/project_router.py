@@ -33,7 +33,7 @@ async def create_project(
     new_project = Project(
         user_id=current_user.id,
         name=body.name,
-        description=body.description,
+        description=body.description or "",
         status=body.status if hasattr(body, "status") else "active",
         team_size=body.team_size if hasattr(body, "team_size") else 1,
         due_date=(

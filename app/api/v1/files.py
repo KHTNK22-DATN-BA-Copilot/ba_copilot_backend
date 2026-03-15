@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.file import Files
 from app.models.user import User
-from app.utils.file_handling import has_extension, upload_to_supabase
+from app.utils.file_handling import has_extension, upload_to_supabase, delete_file_from_supabase
 from app.schemas.folder import CreateFolderRequest
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
@@ -65,7 +65,7 @@ async def upload(
                 continue
 
             suffix = os.path.splitext(file.filename)[1]
-            extension = suffix.replace(".", "")
+
             file_name = os.path.splitext(file.filename)[0]
             unique_title = get_unique_diagram_name(db, file_name, project_id, suffix)
 
@@ -78,7 +78,7 @@ async def upload(
                 tmp_path = tmp.name
 
             file.file.seek(0)
-            raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}.{suffix}"
+            raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}{suffix}"
             raw_url = await upload_to_supabase(file,raw_filename)
 
             if not raw_url:
@@ -146,7 +146,7 @@ async def upload(
                 updated_by=current_user.id,
                 name=file.filename,
                 content=content,
-                extension=extension,
+                extension=suffix,
                 storage_path=raw_url,
                 storage_md_path=md_url,
                 file_category="user upload",
@@ -171,7 +171,7 @@ async def export_markdown(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    
+
     doc = (
         db.query(Files)
         .filter(
@@ -195,3 +195,36 @@ async def export_markdown(
         media_type="text/markdown",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.delete("/{file_id}", status_code=200)
+async def delete_file(
+    file_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+
+        file = (
+            db.query(Files)
+            .filter(Files.id == file_id, Files.created_by == current_user.id)
+            .first()
+        )
+
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        if file.storage_path:
+            await delete_file_from_supabase(file.storage_path)
+
+        if file.storage_md_path:
+            await delete_file_from_supabase(file.storage_md_path)
+
+        db.delete(file)
+        db.commit()
+
+        return {"status": "deleted", "file_id": file_id}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
