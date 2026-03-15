@@ -154,16 +154,16 @@ async def generate_planning_doc(
                     user_id=current_user.id,
                     content_type=doc_type,
                     content_id=new_file.id,
-                    role="ai",
-                    message=json.dumps(ai_inner_resp),
+                    role="user",
+                    message=description,
                 ),
                 Chat_Session(
                     project_id=project_id,
                     user_id=current_user.id,
                     content_type=doc_type,
                     content_id=new_file.id,
-                    role="user",
-                    message=description,
+                    role="ai",
+                    message=json.dumps(ai_inner_resp),
                 ),
             ]
         )
@@ -376,16 +376,16 @@ async def regenerate_planning_doc(
                     user_id=current_user.id,
                     content_type=doc.file_type,
                     content_id=doc.id,
-                    role="ai",
-                    message=json.dumps(ai_inner),
+                    role="user",
+                    message=description,
                 ),
                 Chat_Session(
                     project_id=project_id,
                     user_id=current_user.id,
                     content_type=doc.file_type,
                     content_id=doc.id,
-                    role="user",
-                    message=description,
+                    role="ai",
+                    message=json.dumps(ai_inner),
                 ),
             ]
         )
