@@ -50,6 +50,24 @@ async def upload_to_supabase(file: UploadFile,new_name:str|None=None) -> str | N
         return None
 
 
+async def delete_file_from_supabase(file_path: str) -> bool:
+    try:
+        clean_path = file_path.lstrip("/")
+
+        response = supabase.storage.from_(SUPABASE_BUCKET).remove([clean_path])
+
+        if response and len(response) > 0:
+            logger.info(f"Deleted file from storage: {clean_path}")
+            return True
+
+        logger.warning(f"File not found or not deleted: {clean_path}")
+        return False
+
+    except Exception as e:
+        logger.exception(f"Failed to delete file {file_path}: {e}")
+        return False
+
+
 async def list_file_from_supabase(existing_files_db: List):
     existing_files_uploadfile = []
     for file in existing_files_db:
