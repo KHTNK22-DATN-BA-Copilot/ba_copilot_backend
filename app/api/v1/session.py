@@ -1,3 +1,4 @@
+import json
 import logging
 from uuid import UUID
 from fastapi import (
@@ -30,15 +31,29 @@ async def list_Session(
         .all()
     )
 
+
+
     result = []
     for session in session_list:
+        message = ""
+        summary = ""
+
+        if session.role == "ai":
+            try:
+                parsed = json.loads(session.message)
+                message = parsed.get("content") or ""
+                summary = parsed.get("summary") or ""
+            except:
+                message = session.message or ""
+        else:
+            message = session.message or ""
 
         result.append(
             GetSessionResponse(
                 role=session.role,
-                message=session.message,
+                message=message,
+                summary=summary,
                 create_at=session.created_at,
             )
         )
-
     return {"Sessions": result}
