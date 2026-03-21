@@ -1,11 +1,12 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
 class GetSessionResponse(BaseModel):
     role: str
     message: str
+    summary: Optional[str] = ""
     create_at: datetime
 
 
