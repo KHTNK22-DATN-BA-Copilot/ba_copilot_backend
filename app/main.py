@@ -4,6 +4,7 @@ from app.api.v1 import (
     oauth,
     user,
     wireframe,
+    search,
     srs,
     project_router,
     diagram,
@@ -60,6 +61,9 @@ app.include_router(analysis_ws.router, prefix="/api/v1", tags=["analysis step we
 
 # Oauth routes
 app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
+
+# Search route
+app.include_router(search.router, prefix="/api/v1/search", tags=["global search"])
 
 # Configure CORS
 app.add_middleware(
