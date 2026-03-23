@@ -2,8 +2,10 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
 
+from app.schemas.base_response import BaseResponseModel
 
-class UserBase(BaseModel):
+
+class UserBase(BaseResponseModel):
     name: str
     email: EmailStr
 
@@ -23,16 +25,16 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
-class RegisterResponse(BaseModel):
+class RegisterResponse(BaseResponseModel):
     user: UserResponse
     message: str
     
 class UserInDB(UserResponse):
     passwordhash: str
 
-class UserUpdate(BaseModel):
+class UserUpdate(BaseResponseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
 
-class UserDeleteResponse(BaseModel):
+class UserDeleteResponse(BaseResponseModel):
     message: str

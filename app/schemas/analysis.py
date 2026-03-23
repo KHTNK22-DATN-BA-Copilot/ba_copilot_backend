@@ -1,12 +1,13 @@
-from pydantic import BaseModel, Field
+
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.base_response import BaseResponseModel
 
 
-class AnalysisGenerateResponse(BaseModel):
+class AnalysisGenerateResponse(BaseResponseModel):
     document_id: str
     user_id: Optional[str]
-    generated_at: str
+    generated_at: datetime
     input_description: str
     document: str
     doc_type: str
@@ -15,7 +16,7 @@ class AnalysisGenerateResponse(BaseModel):
     file_size_kb:float
 
 
-class GetAnalysisResponse(BaseModel):
+class GetAnalysisResponse(BaseResponseModel):
     document_id: str
     project_name: str
     content: str
@@ -25,7 +26,7 @@ class GetAnalysisResponse(BaseModel):
     file_size_kb:float
 
 
-class UpdateAnalysisResponse(BaseModel):
+class UpdateAnalysisResponse(BaseResponseModel):
     document_id: str
     project_name: str
     content: str
@@ -33,5 +34,5 @@ class UpdateAnalysisResponse(BaseModel):
     file_size_kb: float
 
 
-class AnalysisListResponse(BaseModel):
+class AnalysisListResponse(BaseResponseModel):
     documents: List[GetAnalysisResponse]

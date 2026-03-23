@@ -161,7 +161,7 @@ async def generate_analysis_doc(
         return AnalysisGenerateResponse(
             document_id=str(new_file.id),
             user_id=str(current_user.id),
-            generated_at=str(datetime.now(timezone.utc)),
+            generated_at=datetime.now(timezone.utc),
             input_description=description,
             document=content,
             doc_type=doc_type,
@@ -380,7 +380,7 @@ async def regenerate_analysis_doc(
         return AnalysisGenerateResponse(
             document_id=str(doc.id),
             user_id=str(current_user.id),
-            generated_at=str(datetime.now(timezone.utc)),
+            generated_at=datetime.now(timezone.utc),
             input_description=description,
             document=content,
             doc_type=doc.file_type,
