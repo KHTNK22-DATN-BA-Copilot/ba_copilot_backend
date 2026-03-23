@@ -1,9 +1,11 @@
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-class GetFileResponse(BaseModel):
+from app.schemas.base_response import BaseResponseModel
+
+class GetFileResponse(BaseResponseModel):
     id: UUID = Field(..., description="Unique identifier of the file")
     project_id: int = Field(..., description="ID of the associated project")
     folder_id: Optional[int] = Field(..., description="ID of the folder containing the file")
@@ -22,3 +24,15 @@ class GetFileResponse(BaseModel):
     updated_at: datetime = Field(..., description="Timestamp when the file was last updated")
 
 
+class UploadedFileResponse(BaseResponseModel):
+    id: str
+    name: str
+    size_kb: float
+    type: str
+    content: str
+    created_at: datetime = Field(..., description="Timestamp when the file was created")
+
+
+class UploadResponse(BaseResponseModel):
+    status: str
+    files: List[UploadedFileResponse]

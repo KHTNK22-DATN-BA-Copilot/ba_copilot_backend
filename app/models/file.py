@@ -1,6 +1,5 @@
-from typing import List, Optional
+
 import uuid
-from pydantic import BaseModel
 from sqlalchemy import (
     Column,
     Numeric,
@@ -51,13 +50,4 @@ class Files(Base):
     )
 
 
-class UploadedFileResponse(BaseModel):
-    id: str
-    name: str
-    size_kb: float
-    type: str
-    content:str
 
-class UploadResponse(BaseModel):
-    status: str
-    files: List[UploadedFileResponse]

@@ -4,11 +4,13 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
-class CreateFolderRequest(BaseModel):
+from app.schemas.base_response import BaseResponseModel
+
+class CreateFolderRequest(BaseResponseModel):
     name: str = Field(..., description="The name of the folder")
     parent_id: Optional[int] = Field(None, description="The parent folder id")
 
-class CreateFolderResponse(BaseModel):
+class CreateFolderResponse(BaseResponseModel):
     id: int = Field(..., description="The id of the folder")
     project_id: int = Field(..., description="The project id")
     parent_id: Optional[int] = Field(None, description="The parent folder id")
@@ -20,17 +22,17 @@ class CreateFolderResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CreateFolderResult(BaseModel):
+class CreateFolderResult(BaseResponseModel):
     folder: Optional[CreateFolderResponse] = None
     error: Optional[str] = None
     detail: Optional[str] = None
 
 
-class UpdateFolderRequest(BaseModel):
+class UpdateFolderRequest(BaseResponseModel):
     name: Optional[str] = Field(None, description="The name of the folder")
     parent_id: Optional[int] = Field(None, description="The parent folder id")
 
-class UpdateFolderResponse(BaseModel):
+class UpdateFolderResponse(BaseResponseModel):
     id: int = Field(..., description="The id of the folder")
     project_id: int = Field(..., description="The project id")
     parent_id: Optional[int] = Field(None, description="The parent folder id")
@@ -40,7 +42,7 @@ class UpdateFolderResponse(BaseModel):
     created_at: datetime = Field(..., description="The creation time of the folder")
     updated_at: datetime = Field(..., description="The update time of the folder")
 
-class DeleteFolderResponse(BaseModel): 
+class DeleteFolderResponse(BaseResponseModel): 
     id: int = Field(..., description="The id of the folder")
     project_id: int = Field(..., description="The project id")
     parent_id: Optional[int] = Field(None, description="The parent folder id")
@@ -50,7 +52,7 @@ class DeleteFolderResponse(BaseModel):
     created_at: datetime = Field(..., description="The creation time of the folder")
     updated_at: datetime = Field(..., description="The update time of the folder")
 
-class GetFolderResponse(BaseModel):
+class GetFolderResponse(BaseResponseModel):
     id: int = Field(..., description="The id of the folder")
     name: str = Field(..., description="The name of the folder")
     project_id: int = Field(..., description="The project id")
@@ -59,7 +61,7 @@ class GetFolderResponse(BaseModel):
     created_at: datetime = Field(..., description="The creation time of the folder")
     updated_at: datetime = Field(..., description="The update time of the folder")
 
-class GetFolderChildrenReponse(BaseModel): 
+class GetFolderChildrenReponse(BaseResponseModel): 
     folders: List[GetFolderResponse]
     files: List[GetFileResponse]
 

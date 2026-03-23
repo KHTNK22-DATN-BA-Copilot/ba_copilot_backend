@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session
 from app.api.v1.auth import get_current_user
 from app.core.database import get_db
 from app.core.config import settings
-from app.models.file import Files, UploadedFileResponse, UploadResponse
+from app.models.file import Files
 from app.models.user import User
 from app.utils.file_handling import has_extension, upload_to_supabase, delete_file_from_supabase,extract_text_from_binary
-from app.schemas.folder import CreateFolderRequest
+from app.schemas.file import UploadedFileResponse, UploadResponse
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.call_ai_service import call_ai_service
@@ -63,8 +63,6 @@ ALLOWED_EXTENSIONS = {
 }
 
 
-
-
 @router.post(
     "/upload/{project_id}/{folder_id}",
     response_model=UploadResponse,
@@ -93,7 +91,9 @@ async def upload(
                 )
 
             file_name = os.path.splitext(file.filename)[0]
+            logger.info(f"file name {file_name}")
             unique_title = get_unique_diagram_name(db, file_name, project_id, suffix)
+            logger.info(f"unique name {unique_title}")
 
             binary_content = await file.read()
             file_size_bytes = len(binary_content)
@@ -194,7 +194,7 @@ async def upload(
                 folder_id=folder_id,
                 created_by=current_user.id,
                 updated_by=current_user.id,
-                name=file.filename,
+                name=unique_title,
                 content=raw_text,
                 extension=suffix,
                 storage_path=raw_url,
@@ -211,10 +211,11 @@ async def upload(
             upload_files.append(
                 UploadedFileResponse(
                     id=str(raw_record.id),
-                    name=file.filename,
+                    name=raw_record.name,
                     size_kb=file_size_kb,
-                    type=suffix,
+                    type=raw_record.extension,
                     content=raw_text, 
+                    created_at=raw_record.created_at
                 )
             )
 

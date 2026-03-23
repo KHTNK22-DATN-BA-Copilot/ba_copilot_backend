@@ -2,7 +2,8 @@ import re
 from sqlalchemy.orm import Session
 
 from app.models.file import Files
-
+import logging
+logger = logging.getLogger(__name__)
 
 def get_unique_diagram_name(
     db: Session, title: str, project_id: int, diagram_type: str
@@ -20,6 +21,8 @@ def get_unique_diagram_name(
         .all()
     )
 
+    
+    logger.info(f"existing_documents {existing_documents}")
 
     max_suffix = 0
 
