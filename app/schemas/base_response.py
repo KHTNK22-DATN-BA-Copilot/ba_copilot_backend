@@ -14,3 +14,5 @@ class BaseResponseModel(BaseModel):
         if isinstance(v, datetime):
             return utc_to_vn(v)
         return v
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
