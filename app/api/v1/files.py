@@ -87,7 +87,7 @@ async def upload(
             if suffix not in ALLOWED_EXTENSIONS:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Unsupported file type '{suffix}'. Allowed formats: txt, md, cvs, pdf, docx, pptx, png, jpg, jpeg and gif.",
+                    detail=f"Unsupported file type '{suffix}'. Allowed formats: txt, md, csv, pdf, docx, pptx, png, jpg, jpeg and gif.",
                 )
 
             file_name = os.path.splitext(file.filename)[0]
@@ -112,7 +112,7 @@ async def upload(
                 tmp_path = tmp.name
 
             try:
-
+              
                 file.file.seek(0)
                 raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}{suffix}"
                 raw_url = await upload_to_supabase(file, raw_filename)
@@ -120,9 +120,43 @@ async def upload(
                 if not raw_url:
                     raise Exception(f"Failed to upload raw file {file.filename}")
 
-                md = MarkItDown(enable_plugins=False)
-                result = md.convert(tmp_path)
-                markdown_text = result.text_content
+            
+                if suffix == ".md":
+                  
+                    markdown_text = raw_text
+                    md_url = raw_url
+                else:
+                   
+                    md = MarkItDown(enable_plugins=False)
+                    result = md.convert(tmp_path)
+                    markdown_text = result.text_content
+
+                   
+                    md_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}_convert.md"
+
+                    with tempfile.NamedTemporaryFile(
+                        "w", delete=False, suffix=".md", encoding="utf-8"
+                    ) as md_tmp:
+                        md_content = (
+                            markdown_text
+                            if markdown_text.strip()
+                            else f"![{file_name}]({raw_url})"
+                        )
+                        md_tmp.write(md_content)
+                        md_tmp_path = md_tmp.name
+
+                    try:
+                        md_upload = UploadFile(
+                            filename=md_filename, file=open(md_tmp_path, "rb")
+                        )
+                        md_url = await upload_to_supabase(md_upload)
+                        if not md_url:
+                            raise Exception(
+                                f"Failed to upload md file for {file.filename}"
+                            )
+                    finally:
+                        if os.path.exists(md_tmp_path):
+                            os.remove(md_tmp_path)
 
             except Exception as e:
                 raise HTTPException(
@@ -130,42 +164,16 @@ async def upload(
                     detail=f"Error processing Upload/MarkItDown for {file.filename}: {str(e)}",
                 )
             finally:
-
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
 
-            md_filename = (
-                f"/{current_user.id}/{project_id}/user/{path}/{unique_title}.md"
-            )
-
-            with tempfile.NamedTemporaryFile(
-                "w", delete=False, suffix=".md", encoding="utf-8"
-            ) as md_tmp:
-                md_content = (
-                    markdown_text
-                    if markdown_text.strip()
-                    else f"![{file_name}]({raw_url})"
-                )
-                md_tmp.write(md_content)
-                md_tmp_path = md_tmp.name
-
-            try:
-                md_upload = UploadFile(
-                    filename=md_filename, file=open(md_tmp_path, "rb")
-                )
-                md_url = await upload_to_supabase(md_upload)
-                if not md_url:
-                    raise Exception(f"Failed to upload md file for {file.filename}")
-            finally:
-                if os.path.exists(md_tmp_path):
-                    os.remove(md_tmp_path)
-
+           
             file_metadata = {}
             try:
                 temp_doc_id = f"temp-{unique_title}"
                 metadata_payload = {
                     "document_id": temp_doc_id,
-                    "content": markdown_text, 
+                    "content": markdown_text,
                     "filename": file.filename,
                 }
 
@@ -189,6 +197,7 @@ async def upload(
                 )
                 file_metadata = {"extraction_status": "failed", "error": str(me)}
 
+           
             raw_record = Files(
                 project_id=project_id,
                 folder_id=folder_id,
@@ -214,8 +223,8 @@ async def upload(
                     name=raw_record.name,
                     size_kb=file_size_kb,
                     type=raw_record.extension,
-                    content=raw_text, 
-                    created_at=raw_record.created_at
+                    content=raw_text,
+                    created_at=raw_record.created_at,
                 )
             )
 
