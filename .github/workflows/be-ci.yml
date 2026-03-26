@@ -4,14 +4,19 @@ on:
   push:
     branches: 
       - main
-  pull_request:
-    branches:
-      - main
+
+env:
+  IMAGE_NAME: ghcr.io/khtnk22-datn-ba-copilot/ba_copilot_backend/backend:latest
 
 jobs:
-  # ========== CI: Build ==========
+  # ========== CI: Build & Lint ==========
   build:
-    runs-on: ["self-hosted", "Linux", "X64"]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write   # 🔥 bắt buộc để push GHCR
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,64 +30,42 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Syntax check
+      - name: Lint (ruff)
         run: ruff check .
-  
-  # ========== CI: Test ==========
-  # test:
-  #   runs-on: ["self-hosted", "Linux", "X64"]
-  #   needs: build
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Setup Python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.11
-  #         cache: 'pip'
-  #
-  #     - name: Install dependencies
-  #       run: pip install -r requirements.txt
-  #
-  #     - name: Run tests
-  #       run: pytest tests/
-  
-  # ========== CD: Deploy to VPS ==========
+
+      # ===== Docker =====
+      - name: Login to GHCR
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ secrets.ACTOR }} --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t $IMAGE_NAME .
+
+      - name: Push Docker image
+        run: docker push $IMAGE_NAME
+
+  # ========== CD: Deploy ==========
   deploy:
     runs-on: ["self-hosted", "Linux", "X64"]
     needs: build
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Login to GHCR (server)
+        run: echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.ACTOR }} --password-stdin
 
-      - name: Pull latest code to VPS
+      - name: Pull latest backend image
+        run: docker pull $IMAGE_NAME
+
+      - name: Restart backend container
         run: |
-          cd /home/bacopilot/bacopilot/ba_copilot_backend  
-          git pull origin main
-
-      - name: Stop be container
-        run: docker compose stop backend || true
+          docker compose pull backend
+          docker compose up -d --force-recreate backend
         working-directory: /home/bacopilot/bacopilot
 
-      - name: Remove be container
-        run: docker compose rm -f backend || true
-        working-directory: /home/bacopilot/bacopilot
-
-      - name: Build be image
-        run: docker compose build --no-cache backend
-        working-directory: /home/bacopilot/bacopilot
-
-      - name: Start be container
-        run: docker compose up -d backend
-        working-directory: /home/bacopilot/bacopilot
-
-      - name: Cleanup old Docker images
+      - name: Cleanup old images
         run: docker image prune -f
 
       - name: Health check
         run: |
-          echo "Waiting for backend container to start..."
+          echo "Waiting for backend..."
           sleep 10
-          docker ps | grep ba-copilot-backend || echo "Warning: Backend container may not be running"
+          docker ps | grep ba-copilot-backend || echo "Warning: Backend may not be running"
