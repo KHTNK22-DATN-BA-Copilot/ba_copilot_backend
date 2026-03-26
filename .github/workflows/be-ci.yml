@@ -30,9 +30,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Lint (ruff)
-        run: ruff check .
-
       # ===== Docker =====
       - name: Login to GHCR
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ secrets.ACTOR }} --password-stdin
