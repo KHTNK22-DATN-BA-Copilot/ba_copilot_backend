@@ -102,26 +102,24 @@ def get_current_user(
 
 @router.post("/register", response_model=RegisterResponse)
 def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
-    # Check if user already exists
+    
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    # Hash password and create user
+   
     hashed_password = get_password_hash(user_data.passwordhash)
     otp = str(secrets.randbelow(1000000)).zfill(6)
     hashed_otp = get_otp_hash(otp)
     
-    # Check if auto-verify is enabled
-    from app.core.config import settings
+  
+   
     if settings.auto_verify_email:
-        # Auto-verify email without sending verification email
         email_verified = True
         print(f"Auto-verified email for user: {user_data.email}")
     else:
-        # Send verification email
         email_verified = False
         email_sent = send_verify_email_otp(user_data.email, otp)
         if not email_sent:
@@ -169,13 +167,12 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Verify old password
+   
     if not verify_password(password_data.old_password, current_user.passwordhash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect old password"
         )
 
-    # Hash and update new password
     hashed_new_password = get_password_hash(password_data.new_password)
     current_user.passwordhash = hashed_new_password
     current_user.updated_at = datetime.now(timezone.utc)
@@ -255,17 +252,17 @@ def login(email: str = Form(), password: str = Form(), db: Session = Depends(get
             detail="Incorrect email or password",
         )
 
-    # create access_token
+    
     access_token = create_access_token(data={"sub": user.email})
 
-    # create refresh_token
+    
     expired_at = datetime.now(timezone.utc) + timedelta(days=7)
     refresh_token = str(uuid.uuid4())
 
-    # Store token in database for logout tracking
+   
     token_record = Token(
         token=refresh_token,
-        expiry_date=expired_at,  # Same as token expiry
+        expiry_date=expired_at,  
         user_id=user.id,
     )
     db.add(token_record)
@@ -286,7 +283,7 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN, detail="Refresh Token is required!"
         )
 
-    # Tìm token trong database
+    
     refresh_token = (
         db.query(Token)
         .filter(Token.token == request.refresh_token)
@@ -299,7 +296,7 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="Refresh token is not in database!",
         )
 
-    # Kiểm tra token hết hạn
+    
     if refresh_token.expiry_date < datetime.now(timezone.utc):
         db.delete(refresh_token)
         db.commit()
@@ -308,7 +305,7 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="Refresh token was expired. Please make a new signin request.",
         )
 
-    # Lấy user liên kết
+    
     user = refresh_token.user
     if not user:
         raise HTTPException(
@@ -316,7 +313,7 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="User not found for this refresh token.",
         )
 
-    # Tạo access token mới
+    
     new_access_token = create_access_token(
         data={"sub": user.email},
         expires_delta=timedelta(hours=1),
@@ -353,7 +350,7 @@ def logout(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Find and delete the token from database to invalidate it
+    
     token_record = db.query(Token).filter(Token.token == token).first()
     if token_record:
         db.delete(token_record)

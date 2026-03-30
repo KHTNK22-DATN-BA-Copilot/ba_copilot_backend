@@ -1,15 +1,17 @@
 import logging
 import os
-from typing import List
+from typing import List, Tuple
 import uuid
 from fastapi import UploadFile
 from app.utils.supabase_client import supabase
 from PyPDF2 import PdfReader
-import docx2txt
+import docx
 import io
 import tempfile
 import unicodedata
 import re
+import pptx
+import json as json_lib
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,24 @@ async def upload_to_supabase(file: UploadFile,new_name:str|None=None) -> str | N
         return None
 
 
+async def delete_file_from_supabase(file_path: str) -> bool:
+    try:
+        clean_path = file_path.lstrip("/")
+
+        response = supabase.storage.from_(SUPABASE_BUCKET).remove([clean_path])
+
+        if response and len(response) > 0:
+            logger.info(f"Deleted file from storage: {clean_path}")
+            return True
+
+        logger.warning(f"File not found or not deleted: {clean_path}")
+        return False
+
+    except Exception as e:
+        logger.exception(f"Failed to delete file {file_path}: {e}")
+        return False
+
+
 async def list_file_from_supabase(existing_files_db: List):
     existing_files_uploadfile = []
     for file in existing_files_db:
@@ -78,28 +98,103 @@ async def update_file_from_supabase(file_path: str,file: UploadFile) -> str | No
         return None
 
 
-async def extract_text_from_file(file: UploadFile) -> str:
-    """Trích xuất nội dung text từ file upload."""
-    content = ""
+# async def extract_text_from_file(file: UploadFile) -> str:
+#     """Trích xuất nội dung text từ file upload."""
+#     content = ""
 
-    # Đọc nội dung file bytes
-    file_content = await file.read()
-    file.file.seek(0)  # Reset con trỏ nếu cần upload lại sau
+#     # Đọc nội dung file bytes
+#     file_content = await file.read()
+#     file.file.seek(0)  # Reset con trỏ nếu cần upload lại sau
 
-    if file.filename.endswith(".txt"):
-        content = file_content.decode("utf-8", errors="ignore")
-    elif file.filename.endswith(".pdf"):
-        pdf_reader = PdfReader(io.BytesIO(file_content))
-        content = "\n".join([page.extract_text() or "" for page in pdf_reader.pages])
-    elif file.filename.endswith((".doc", ".docx")):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            tmp.write(file_content)
-            tmp.flush()
-            content = docx2txt.process(tmp.name)
-    else:
-        content = f"[Unsupported file type: {file.filename}]"
+#     if file.filename.endswith(".txt"):
+#         content = file_content.decode("utf-8", errors="ignore")
+#     elif file.filename.endswith(".pdf"):
+#         pdf_reader = PdfReader(io.BytesIO(file_content))
+#         content = "\n".join([page.extract_text() or "" for page in pdf_reader.pages])
+#     elif file.filename.endswith((".doc", ".docx")):
+#         with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+#             tmp.write(file_content)
+#             tmp.flush()
+#             content = docx2txt.process(tmp.name)
+#     else:
+#         content = f"[Unsupported file type: {file.filename}]"
 
-    return content
+#     return content
+
+
+def extract_text_from_binary(binary_content: bytes, suffix: str) -> str:
+    text = ""
+    try:
+        if suffix == ".pdf":
+            reader = PdfReader(io.BytesIO(binary_content))
+            text = "\n".join([page.extract_text() or "" for page in reader.pages])
+
+        elif suffix == ".docx":
+            doc = docx.Document(io.BytesIO(binary_content))
+            extracted_lines = []
+
+           
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    extracted_lines.append(para.text.strip())
+
+            
+            for table in doc.tables:
+                for row in table.rows:
+                   
+                    row_data = [
+                        cell.text.strip() for cell in row.cells if cell.text.strip()
+                    ]
+                    if row_data:
+                        extracted_lines.append(" | ".join(row_data))
+
+            text = "\n".join(extracted_lines)
+
+        elif suffix == ".pptx":
+            ppt = pptx.Presentation(io.BytesIO(binary_content))
+            for slide in ppt.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        text += shape.text.strip() + "\n"
+
+        elif suffix in [".txt", ".md", ".csv"]:
+            text = binary_content.decode("utf-8", errors="ignore")
+
+    except Exception as e:
+        raise Exception(f"Error reading {suffix} file content: {str(e)}")
+
+    return text.strip()
+
+
+def extract_html_css_from_content(content: str) -> Tuple[str, str]:
+    """Extract HTML and CSS from content"""
+    html_content = ""
+    css_content = None
+
+    try:
+        parsed_json = json_lib.loads(content)
+
+        if isinstance(parsed_json, dict) and "html" in parsed_json:
+            html_content = parsed_json.get("html", "")
+            css_content = parsed_json.get("css", "")
+
+    except Exception:
+        pass
+
+    return html_content.strip(), css_content.strip() if css_content else None
+
+
+def merge_html_css(html: str, css: str) -> str:
+    """Merge HTML and CSS into one content with markers"""
+    return f"""
+            <!--HTML_START-->
+            {html}
+            <!--HTML_END-->
+
+            <!--CSS_START-->
+            {css}
+            <!--CSS_END-->
+            """.strip()
 
 
 def has_extension(filename: str) -> bool:

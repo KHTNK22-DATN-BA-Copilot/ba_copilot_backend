@@ -69,7 +69,7 @@ async def run_design_step(
                         "step": "design",
                         "index": index,
                         "doc_type": doc_type,
-                        "data": result.model_dump(),
+                        "data": result.model_dump(mode="json"),
                     }
                 )
 

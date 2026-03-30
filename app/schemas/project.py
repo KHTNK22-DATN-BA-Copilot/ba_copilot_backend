@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Union
 from enum import Enum
 from datetime import datetime, timedelta,timezone
+
+from app.schemas.base_response import BaseResponseModel
 class ProjectStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
@@ -15,7 +17,7 @@ class ProjectPriority(str,Enum):
     MEDIUM="medium"
     HIGH="high"
     CRITICAL = "critical"
-class ProjectCreate(BaseModel):
+class ProjectCreate(BaseResponseModel):
     name: str = Field(..., description="The name of the project")
     description: Optional[str] = Field(None, description="Project description")
     status: Optional[ProjectStatus] = Field(ProjectStatus.ACTIVE, description="Project status")
@@ -24,7 +26,7 @@ class ProjectCreate(BaseModel):
                                description="Due date (default: 30 days from now)")
     project_priority:Optional[ProjectPriority]=Field(ProjectPriority.LOW,description="Project priority")
 
-class ProjectUpdate(BaseModel):
+class ProjectUpdate(BaseResponseModel):
     name: str = Field(..., description="Updated project name")
     description: str = Field(..., description="Updated description")
     status: ProjectStatus = Field(..., description="Updated project status")
@@ -33,7 +35,7 @@ class ProjectUpdate(BaseModel):
     team_size: int=Field(...,description="Project team size")
     settings: dict = Field(..., description="Project settings")
 
-class ProjectResponse(BaseModel):
+class ProjectResponse(BaseResponseModel):
     id: int = Field(..., description="Project unique ID")
     user_id: int = Field(..., description="ID of the user owning the project")
     name: str = Field(..., description="Project name")
@@ -44,7 +46,7 @@ class ProjectResponse(BaseModel):
     team_size: int = Field(..., description="Project team size")
     settings: Optional[dict] = Field(None, description="Project settings")
 
-class ProjectUpdateResponse(BaseModel):
+class ProjectUpdateResponse(BaseResponseModel):
     id: int = Field(..., description="Project unique ID")
     message: str = Field(..., description="Status message confirming update")
 
@@ -52,19 +54,19 @@ class ProjectDetailResponse(ProjectResponse):
     created_at: Optional[datetime] = Field(None, description="Timestamp when the project was created")
     updated_at: Optional[datetime] = Field(None, description="Timestamp when the project was last updated")
 
-class ProjectListResponse(BaseModel):
+class ProjectListResponse(BaseResponseModel):
     projects: List[ProjectDetailResponse] = Field(..., description="List of user's projects")
 
-class DeleteProjectResponse(BaseModel):
+class DeleteProjectResponse(BaseResponseModel):
     message: str = Field(..., description="Status message confirming deletion")
 
-class GetProjectChildResponse(BaseModel): 
+class GetProjectChildResponse(BaseResponseModel): 
     folders: List[GetFolderResponse]
     files: List[GetFileResponse]
 
-class TreeStructure(BaseModel):
+class TreeStructure(BaseResponseModel):
     folders: List[FolderNode]
     files: List[GetFileResponse]
-class GetProjectTreeResponse(BaseModel): 
+class GetProjectTreeResponse(BaseResponseModel): 
     project_id: int
     tree: TreeStructure

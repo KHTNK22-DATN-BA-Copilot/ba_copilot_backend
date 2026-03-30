@@ -69,7 +69,7 @@ async def run_analysis_step(
                         "step": "analysis",
                         "index": index,
                         "doc_type": doc_type,
-                        "data": result.model_dump(),
+                        "data": result.model_dump(mode="json"),
                     }
                 )
 

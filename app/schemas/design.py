@@ -2,8 +2,10 @@ from pydantic import BaseModel, Field
 from typing import Annotated, Dict, Any, Optional, List
 from datetime import datetime
 
+from app.schemas.base_response import BaseResponseModel
 
-class DesignGenerateResponse(BaseModel):
+
+class DesignGenerateResponse(BaseResponseModel):
     """Unified response schema for Design generation."""
 
     document_id: str = Field(
@@ -12,7 +14,7 @@ class DesignGenerateResponse(BaseModel):
     user_id: Optional[str] = Field(
         None, description="User ID who generated the document"
     )
-    generated_at: str = Field(..., description="Timestamp when document was generated")
+    generated_at: datetime = Field(..., description="Timestamp when document was generated")
     input_description: str = Field(
         ..., description="Original input used for generation"
     )
@@ -23,7 +25,7 @@ class DesignGenerateResponse(BaseModel):
     file_size_kb:float=Field(...,description="File size")
 
 
-class GetDesignResponse(BaseModel):
+class GetDesignResponse(BaseResponseModel):
     document_id: str
     project_name: str
     content: str
@@ -33,21 +35,20 @@ class GetDesignResponse(BaseModel):
     file_size_kb: float
 
 
-class UpdateDesignResponse(BaseModel):
+class UpdateDesignResponse(BaseResponseModel):
     document_id: str
     project_name: str
     content: str
-    status: str
     updated_at: datetime
     file_size_kb: float
 
-class DesignListResponse(BaseModel):
+class DesignListResponse(BaseResponseModel):
     documents: List[GetDesignResponse] = Field(
         ..., description="List of design documents"
     )
 
 
-class DesignDocument(BaseModel):
+class DesignDocument(BaseResponseModel):
     document_id: str
     project_name: str
     content: str

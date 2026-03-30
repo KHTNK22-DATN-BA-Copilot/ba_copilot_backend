@@ -23,7 +23,7 @@ async def run_planning_step(
         await notifier.send({"type": "step_start", "step": "planning"})
 
         for index, doc in enumerate(documents):
-           
+
             if stop_event and stop_event.is_set():
                 logger.info(
                     f"Project {project_id}: Planning generation stopped by user request."
@@ -53,7 +53,7 @@ async def run_planning_step(
             )
 
             try:
-               
+
                 result = await generate_planning_doc(
                     project_id=project_id,
                     project_name=doc_type,
@@ -69,7 +69,7 @@ async def run_planning_step(
                         "step": "planning",
                         "index": index,
                         "doc_type": doc_type,
-                        "data": result.model_dump(),
+                        "data": result.model_dump(mode="json"),
                     }
                 )
 
@@ -106,7 +106,6 @@ async def run_planning_step(
                 )
                 continue
 
-       
         await notifier.send(
             {
                 "type": "step_finished",

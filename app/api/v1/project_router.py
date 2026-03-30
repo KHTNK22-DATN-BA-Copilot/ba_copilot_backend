@@ -33,7 +33,7 @@ async def create_project(
     new_project = Project(
         user_id=current_user.id,
         name=body.name,
-        description=body.description,
+        description=body.description or "",
         status=body.status if hasattr(body, "status") else "active",
         team_size=body.team_size if hasattr(body, "team_size") else 1,
         due_date=(
@@ -363,6 +363,7 @@ async def get_project_tree(
             content=file.content,
             file_category=file.file_category,
             file_type=file.file_type,
+            file_size=file.file_size,
             # Use 'metadata' from DB, default to {} if None
             file_metadata=file.file_metadata if file.file_metadata else {}, 
             status=file.status,

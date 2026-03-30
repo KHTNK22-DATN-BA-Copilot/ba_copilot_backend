@@ -132,7 +132,7 @@ async def generate_analysis_doc(
             file_category="ai gen",
             file_type=doc_type,
             file_metadata=file_metadata,
-            file_size_kb=file_size_kb,
+            file_size=file_size_kb,
         )
         db.add(new_file)
         db.flush()
@@ -143,16 +143,16 @@ async def generate_analysis_doc(
                     user_id=current_user.id,
                     content_type=doc_type,
                     content_id=new_file.id,
-                    role="ai",
-                    message=json.dumps(ai_inner),
+                    role="user",
+                    message=description,
                 ),
                 Chat_Session(
                     project_id=project_id,
                     user_id=current_user.id,
                     content_type=doc_type,
                     content_id=new_file.id,
-                    role="user",
-                    message=description,
+                    role="ai",
+                    message=json.dumps(ai_inner),
                 ),
             ]
         )
@@ -161,7 +161,7 @@ async def generate_analysis_doc(
         return AnalysisGenerateResponse(
             document_id=str(new_file.id),
             user_id=str(current_user.id),
-            generated_at=str(datetime.now(timezone.utc)),
+            generated_at=datetime.now(timezone.utc),
             input_description=description,
             document=content,
             doc_type=doc_type,
@@ -240,7 +240,6 @@ async def update_analysis_doc(
     project_id: str,
     document_id: str,
     content: str = Form(...),
-    status: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -259,7 +258,6 @@ async def update_analysis_doc(
 
     folder = db.query(Folder).filter(Folder.id == doc.folder_id).first()
     doc.content = content
-    doc.status = status
     doc.updated_by = current_user.id
 
     upload_file = BytesIO(doc.content.encode("utf-8"))
@@ -275,13 +273,28 @@ async def update_analysis_doc(
     doc.file_size=file_size_kb
     if path:
         doc.storage_path = path
+        
+    chat_session = (
+        db.query(Chat_Session)
+        .filter(
+            Chat_Session.project_id == project_id,
+            Chat_Session.content_id == doc.id,
+            Chat_Session.content_type == doc.file_type,
+            Chat_Session.role == "ai",
+        )
+        .order_by(Chat_Session.created_at.desc())
+        .first()
+    )
+
+    if chat_session:
+        chat_session.message = content
+
     db.commit()
     db.refresh(doc)
     return UpdateAnalysisResponse(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
-        status=status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
     )
@@ -349,16 +362,16 @@ async def regenerate_analysis_doc(
                     user_id=current_user.id,
                     content_type=doc.file_type,
                     content_id=doc.id,
-                    role="ai",
-                    message=json.dumps(ai_inner),
+                    role="user",
+                    message=description,
                 ),
                 Chat_Session(
                     project_id=project_id,
                     user_id=current_user.id,
                     content_type=doc.file_type,
                     content_id=doc.id,
-                    role="user",
-                    message=description,
+                    role="ai",
+                    message=json.dumps(ai_inner),
                 ),
             ]
         )
@@ -367,7 +380,7 @@ async def regenerate_analysis_doc(
         return AnalysisGenerateResponse(
             document_id=str(doc.id),
             user_id=str(current_user.id),
-            generated_at=str(datetime.now(timezone.utc)),
+            generated_at=datetime.now(timezone.utc),
             input_description=description,
             document=content,
             doc_type=doc.file_type,

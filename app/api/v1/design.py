@@ -35,6 +35,8 @@ from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.file_handling import (
     upload_to_supabase,
     update_file_from_supabase,
+    extract_html_css_from_content,
+    merge_html_css,
 )
 from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
@@ -100,6 +102,7 @@ async def generate_design(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
     if design_type not in VALID_DESIGN_TYPES:
         raise HTTPException(
             status_code=400,
@@ -119,34 +122,35 @@ async def generate_design(
 
     new_folder = CreateFolderRequest(name=design_type)
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
-
     if result.error:
         raise HTTPException(status_code=500, detail="Failed to create folder storage")
     folder = result.folder
 
     unique_title = get_unique_diagram_name(db, project_name, project_id, design_type)
-
     file_urls = await list_file(project_id, db, current_user)
     ai_payload = {"message": description, "storage_paths": file_urls}
-
     ai_url = get_ai_endpoint(design_type)
+
     generate_at = datetime.now(timezone.utc)
 
     ai_data = await call_ai_service(ai_url, ai_payload)
-
     ai_inner_response = ai_data.get("response", {})
-    markdown_content = format_design_response(ai_inner_response)
+    html_content, css_content = extract_html_css_from_content(
+        json.dumps(ai_inner_response)
+    )
+    if html_content:
+        markdown_content = merge_html_css(html_content, css_content or "")
+    else:
+        markdown_content = format_design_response(ai_inner_response)
 
     # 5. Upload lên Supabase
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
     upload_file = BytesIO(markdown_content.encode("utf-8"))
     file_size_kb = round(len(upload_file.getvalue()) / 1024, 2)
-
     upload_file = UploadFile(
         filename=file_name, file=BytesIO(markdown_content.encode("utf-8"))
     )
     path_in_bucket = await upload_to_supabase(upload_file)
-
     if path_in_bucket is None:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
 
@@ -197,20 +201,20 @@ async def generate_design(
             message=description,
         )
 
-        db.add_all([new_ai_session, new_user_session])
+        db.add_all([new_user_session, new_ai_session])
         db.commit()
         db.refresh(new_file)
 
         return DesignGenerateResponse(
             document_id=str(new_file.id),
             user_id=str(current_user.id),
-            generated_at=str(generate_at),
+            generated_at=generate_at,
             input_description=description,
             document=markdown_content,
             design_type=design_type,
             status=new_file.status,
             recommend_documents=dependency_result["missing_recommended"],
-            file_size_kb=new_file.file_size
+            file_size_kb=new_file.file_size,
         )
 
     except Exception as e:
@@ -289,49 +293,15 @@ async def get_design_document(
     )
 
 
-# @router.get("/export/{project_id}/{document_id}", response_class=StreamingResponse)
-# async def export_markdown(
-#     project_id: str,
-#     document_id: str,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user),
-# ):
-#     doc = (
-#         db.query(Files)
-#         .filter(
-#             Files.project_id == project_id,
-#             Files.id == document_id,
-#             Files.created_by == current_user.id,
-#             Files.file_type.in_(VALID_DESIGN_TYPES),
-#         )
-#         .first()
-#     )
-
-#     if not doc:
-#         raise HTTPException(status_code=404, detail="Document not found")
-
-#     file_stream = BytesIO(doc.content.encode("utf-8"))
-#     filename = f"{doc.name.replace(' ', '_')}.md"
-
-#     return StreamingResponse(
-#         file_stream,
-#         media_type="text/markdown",
-#         headers={"Content-Disposition": f"attachment; filename={filename}"},
-#     )
-
 
 @router.put("/update/{project_id}/{document_id}", response_model=UpdateDesignResponse)
 async def update_design_document(
     project_id: str,
     document_id: str,
     content: str = Form(...),
-    document_status: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    valid_status = ["generated", "draft", "published", "archived"]
-    if document_status not in valid_status:
-        raise HTTPException(status_code=400, detail="Invalid status")
 
     doc = (
         db.query(Files)
@@ -352,12 +322,12 @@ async def update_design_document(
         raise HTTPException(status_code=404, detail="Folder not found")
 
     doc.content = content
-    doc.status = document_status
+
     doc.updated_by = current_user.id
 
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{doc.name}.md"
     file_like = BytesIO(doc.content.encode("utf-8"))
-   
+
     file_size_kb = round(len(file_like.getvalue()) / 1024, 2)
     upload_file = UploadFile(filename=file_name, file=file_like)
 
@@ -365,7 +335,22 @@ async def update_design_document(
     if path_in_bucket:
         doc.storage_path = path_in_bucket
 
-    doc.file_size=file_size_kb
+    doc.file_size = file_size_kb
+
+    chat_session = (
+        db.query(Chat_Session)
+        .filter(
+            Chat_Session.project_id == project_id,
+            Chat_Session.content_id == doc.id,
+            Chat_Session.content_type == doc.file_type,
+            Chat_Session.role == "ai",
+        )
+        .order_by(Chat_Session.created_at.desc())
+        .first()
+    )
+
+    if chat_session:
+        chat_session.message = content
 
     db.commit()
     db.refresh(doc)
@@ -374,7 +359,6 @@ async def update_design_document(
         document_id=str(doc.id),
         project_name=doc.name,
         content=content,
-        status=document_status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
     )
@@ -447,8 +431,8 @@ async def regenerate_design(
         }
         existing_doc.updated_by = current_user.id
         existing_doc.storage_path = path_in_bucket
-        existing_doc.file_size=file_size_kb
-        
+        existing_doc.file_size = file_size_kb
+
         db.flush()
 
         new_ai_session = Chat_Session(
@@ -469,14 +453,14 @@ async def regenerate_design(
             message=description,
         )
 
-        db.add_all([new_ai_session, new_user_session])
+        db.add_all([new_user_session, new_ai_session])
         db.commit()
         db.refresh(existing_doc)
 
         return DesignGenerateResponse(
             document_id=str(existing_doc.id),
             user_id=str(current_user.id),
-            generated_at=str(generate_at),
+            generated_at=generate_at,
             input_description=description,
             document=markdown_content,
             design_type=design_type,
