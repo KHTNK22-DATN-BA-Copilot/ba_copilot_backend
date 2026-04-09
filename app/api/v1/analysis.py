@@ -30,6 +30,7 @@ from app.utils.folder_utils import create_default_folder
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_ai_generated_metadata
 from app.services.docs_constraint import validate_dependencies
+from app.api.v1.files import list_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,7 +93,10 @@ async def generate_analysis_doc(
         raise HTTPException(500, "Failed to create folder")
     folder = result.folder
 
-    ai_data = await call_ai_service(get_ai_endpoint(doc_type), {"message": description})
+    file_urls = await list_file(project_id, db, current_user)
+    ai_payload = {"message": description, "storage_paths": file_urls}
+
+    ai_data = await call_ai_service(get_ai_endpoint(doc_type), ai_payload)
     ai_inner = ai_data.get("response", {})
     content = format_response(ai_inner)
 

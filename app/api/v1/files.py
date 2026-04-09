@@ -55,6 +55,7 @@ ALLOWED_EXTENSIONS = {
     ".csv",
     ".pdf",
     ".docx",
+    ".doc",
     ".pptx",
     ".png",
     ".jpg",
