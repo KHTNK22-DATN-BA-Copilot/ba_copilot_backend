@@ -113,12 +113,12 @@ async def generate_design(
         f"User {current_user.email} requested {design_type} generation for {project_name}"
     )
 
-    dependency_result = validate_dependencies(project_id, design_type, db, current_user)
-    if not dependency_result["can_proceed"]:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
-        )
+    # dependency_result = validate_dependencies(project_id, design_type, db, current_user)
+    # if not dependency_result["can_proceed"]:
+    #     raise HTTPException(
+    #         status_code=422,
+    #         detail=f"Cannot generate {design_type}. Missing required documents: {dependency_result['missing_required']}",
+    #     )
 
     new_folder = CreateFolderRequest(name=design_type)
     result = await create_default_folder(project_id, new_folder, current_user.id, db)
@@ -213,7 +213,8 @@ async def generate_design(
             document=markdown_content,
             design_type=design_type,
             status=new_file.status,
-            recommend_documents=dependency_result["missing_recommended"],
+            # recommend_documents=dependency_result["missing_recommended"],
+            recommend_documents=[],
             file_size_kb=new_file.file_size,
         )
 

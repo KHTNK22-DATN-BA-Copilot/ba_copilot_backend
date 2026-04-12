@@ -17,8 +17,7 @@ from app.utils.file_handling import has_extension, upload_to_supabase, delete_fi
 from app.schemas.file import UploadedFileResponse, UploadResponse
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
-from app.utils.call_ai_service import call_ai_service
-from app.utils.metadata_utils import create_user_upload_metadata
+from app.tasks.file_tasks import process_markdown_and_metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -113,7 +112,7 @@ async def upload(
                 tmp_path = tmp.name
 
             try:
-              
+
                 file.file.seek(0)
                 raw_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}{suffix}"
                 raw_url = await upload_to_supabase(file, raw_filename)
@@ -121,43 +120,41 @@ async def upload(
                 if not raw_url:
                     raise Exception(f"Failed to upload raw file {file.filename}")
 
-            
-                if suffix == ".md":
-                  
-                    markdown_text = raw_text
-                    md_url = raw_url
-                else:
-                   
-                    md = MarkItDown(enable_plugins=False)
-                    result = md.convert(tmp_path)
-                    markdown_text = result.text_content
+                # if suffix == ".md":
 
-                   
-                    md_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}_convert.md"
+                #     markdown_text = raw_text
+                #     md_url = raw_url
+                # else:
 
-                    with tempfile.NamedTemporaryFile(
-                        "w", delete=False, suffix=".md", encoding="utf-8"
-                    ) as md_tmp:
-                        md_content = (
-                            markdown_text
-                            if markdown_text.strip()
-                            else f"![{file_name}]({raw_url})"
-                        )
-                        md_tmp.write(md_content)
-                        md_tmp_path = md_tmp.name
+                #     md = MarkItDown(enable_plugins=False)
+                #     result = md.convert(tmp_path)
+                #     markdown_text = result.text_content
 
-                    try:
-                        md_upload = UploadFile(
-                            filename=md_filename, file=open(md_tmp_path, "rb")
-                        )
-                        md_url = await upload_to_supabase(md_upload)
-                        if not md_url:
-                            raise Exception(
-                                f"Failed to upload md file for {file.filename}"
-                            )
-                    finally:
-                        if os.path.exists(md_tmp_path):
-                            os.remove(md_tmp_path)
+                #     md_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}_convert.md"
+
+                #     with tempfile.NamedTemporaryFile(
+                #         "w", delete=False, suffix=".md", encoding="utf-8"
+                #     ) as md_tmp:
+                #         md_content = (
+                #             markdown_text
+                #             if markdown_text.strip()
+                #             else f"![{file_name}]({raw_url})"
+                #         )
+                #         md_tmp.write(md_content)
+                #         md_tmp_path = md_tmp.name
+
+                #     try:
+                #         md_upload = UploadFile(
+                #             filename=md_filename, file=open(md_tmp_path, "rb")
+                #         )
+                #         md_url = await upload_to_supabase(md_upload)
+                #         if not md_url:
+                #             raise Exception(
+                #                 f"Failed to upload md file for {file.filename}"
+                #             )
+                #     finally:
+                #         if os.path.exists(md_tmp_path):
+                #             os.remove(md_tmp_path)
 
             except Exception as e:
                 raise HTTPException(
@@ -168,37 +165,35 @@ async def upload(
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
 
-           
-            file_metadata = {}
-            try:
-                temp_doc_id = f"temp-{unique_title}"
-                metadata_payload = {
-                    "document_id": temp_doc_id,
-                    "content": markdown_text,
-                    "filename": file.filename,
-                }
+            # file_metadata = {}
+            # try:
+            #     temp_doc_id = f"temp-{unique_title}"
+            #     metadata_payload = {
+            #         "document_id": temp_doc_id,
+            #         "content": markdown_text,
+            #         "filename": file.filename,
+            #     }
 
-                metadata_response = await call_ai_service(
-                    ai_service_url=settings.ai_service_url_metadata_extraction,
-                    payload=metadata_payload,
-                    retries=2,
-                    read_timeout=120,
-                )
+            #     metadata_response = await call_ai_service(
+            #         ai_service_url=settings.ai_service_url_metadata_extraction,
+            #         payload=metadata_payload,
+            #         retries=2,
+            #         read_timeout=120,
+            #     )
 
-                if metadata_response and "response" in metadata_response:
-                    file_metadata = create_user_upload_metadata(
-                        metadata_response=metadata_response,
-                        content=markdown_text,
-                        filename=file.filename,
-                    )
-                    logger.info(f"Metadata extracted for {file.filename}")
-            except Exception as me:
-                logger.warning(
-                    f"Metadata extraction failed cho {file.filename}: {str(me)}"
-                )
-                file_metadata = {"extraction_status": "failed", "error": str(me)}
+            #     if metadata_response and "response" in metadata_response:
+            #         file_metadata = create_user_upload_metadata(
+            #             metadata_response=metadata_response,
+            #             content=markdown_text,
+            #             filename=file.filename,
+            #         )
+            #         logger.info(f"Metadata extracted for {file.filename}")
+            # except Exception as me:
+            #     logger.warning(
+            #         f"Metadata extraction failed cho {file.filename}: {str(me)}"
+            #     )
+            #     file_metadata = {"extraction_status": "failed", "error": str(me)}
 
-           
             raw_record = Files(
                 project_id=project_id,
                 folder_id=folder_id,
@@ -208,15 +203,23 @@ async def upload(
                 content=raw_text,
                 extension=suffix,
                 storage_path=raw_url,
-                storage_md_path=md_url,
+                # storage_md_path=md_url,
                 file_category="user upload",
                 file_size=file_size_kb,
                 file_type=suffix,
-                file_metadata=file_metadata,
+                status="pending",
+                # file_metadata=file_metadata,
             )
             db.add(raw_record)
             db.commit()
             db.refresh(raw_record)
+
+            temp_path = os.path.join("temp_storage", f"{raw_record.id}{suffix}")
+            os.makedirs("temp_storage", exist_ok=True)
+            with open(temp_path, "wb") as f:
+                f.write(binary_content)
+
+            process_markdown_and_metadata.delay(str(raw_record.id), temp_path, path)
 
             upload_files.append(
                 UploadedFileResponse(
@@ -226,6 +229,7 @@ async def upload(
                     type=raw_record.extension,
                     content=raw_text,
                     created_at=raw_record.created_at,
+                    status=raw_record.status,
                 )
             )
 
