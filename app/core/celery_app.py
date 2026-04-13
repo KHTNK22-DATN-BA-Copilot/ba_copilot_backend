@@ -26,6 +26,9 @@ celery_app.conf.update(
     accept_content=["json"],
     result_serializer="json",
     timezone="Asia/Ho_Chi_Minh",
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
+    task_reject_on_worker_lost=True,
 )
 
 # celery_app.autodiscover_tasks(["app.tasks"])
