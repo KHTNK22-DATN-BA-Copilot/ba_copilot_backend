@@ -17,7 +17,9 @@ from app.utils.file_handling import has_extension, upload_to_supabase, delete_fi
 from app.schemas.file import UploadedFileResponse, UploadResponse
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
-from app.tasks.file_tasks import process_markdown_and_metadata
+from app.tasks.file_tasks import extract_metadata_task,process_markdown_task
+from celery import chain
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -120,41 +122,6 @@ async def upload(
                 if not raw_url:
                     raise Exception(f"Failed to upload raw file {file.filename}")
 
-                # if suffix == ".md":
-
-                #     markdown_text = raw_text
-                #     md_url = raw_url
-                # else:
-
-                #     md = MarkItDown(enable_plugins=False)
-                #     result = md.convert(tmp_path)
-                #     markdown_text = result.text_content
-
-                #     md_filename = f"/{current_user.id}/{project_id}/user/{path}/{unique_title}_convert.md"
-
-                #     with tempfile.NamedTemporaryFile(
-                #         "w", delete=False, suffix=".md", encoding="utf-8"
-                #     ) as md_tmp:
-                #         md_content = (
-                #             markdown_text
-                #             if markdown_text.strip()
-                #             else f"![{file_name}]({raw_url})"
-                #         )
-                #         md_tmp.write(md_content)
-                #         md_tmp_path = md_tmp.name
-
-                #     try:
-                #         md_upload = UploadFile(
-                #             filename=md_filename, file=open(md_tmp_path, "rb")
-                #         )
-                #         md_url = await upload_to_supabase(md_upload)
-                #         if not md_url:
-                #             raise Exception(
-                #                 f"Failed to upload md file for {file.filename}"
-                #             )
-                #     finally:
-                #         if os.path.exists(md_tmp_path):
-                #             os.remove(md_tmp_path)
 
             except Exception as e:
                 raise HTTPException(
@@ -164,35 +131,6 @@ async def upload(
             finally:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
-
-            # file_metadata = {}
-            # try:
-            #     temp_doc_id = f"temp-{unique_title}"
-            #     metadata_payload = {
-            #         "document_id": temp_doc_id,
-            #         "content": markdown_text,
-            #         "filename": file.filename,
-            #     }
-
-            #     metadata_response = await call_ai_service(
-            #         ai_service_url=settings.ai_service_url_metadata_extraction,
-            #         payload=metadata_payload,
-            #         retries=2,
-            #         read_timeout=120,
-            #     )
-
-            #     if metadata_response and "response" in metadata_response:
-            #         file_metadata = create_user_upload_metadata(
-            #             metadata_response=metadata_response,
-            #             content=markdown_text,
-            #             filename=file.filename,
-            #         )
-            #         logger.info(f"Metadata extracted for {file.filename}")
-            # except Exception as me:
-            #     logger.warning(
-            #         f"Metadata extraction failed cho {file.filename}: {str(me)}"
-            #     )
-            #     file_metadata = {"extraction_status": "failed", "error": str(me)}
 
             raw_record = Files(
                 project_id=project_id,
@@ -219,7 +157,11 @@ async def upload(
             with open(temp_path, "wb") as f:
                 f.write(binary_content)
 
-            process_markdown_and_metadata.delay(str(raw_record.id), temp_path, path)
+            # process_markdown_and_metadata.delay(str(raw_record.id), temp_path, path)
+            chain(
+                process_markdown_task.s(str(raw_record.id), temp_path, path),
+                extract_metadata_task.s(),
+            ).apply_async()
 
             upload_files.append(
                 UploadedFileResponse(
