@@ -66,8 +66,6 @@ async def call_ai_service(
                     detail="AI response is not valid JSON",
                 )
             ai_inner_res = data.get("response", {})
-
-            logger.info(f"AI response, [response: {ai_inner_res}]")
             
             content = ""
             if isinstance(ai_inner_res, dict):

@@ -94,19 +94,23 @@ def extract_metadata_task(self, payload: dict):
     db_gen = get_db()
     db = next(db_gen)
 
+    file_id = payload.get("file_id")
+
     try:
-        file_id = payload["file_id"]
         markdown_text = payload["md_text"]
 
         logger.info(f"[START] Metadata task file_id={file_id}")
 
         file_record = db.query(Files).filter(Files.id == file_id).first()
+        if not file_record:
+            raise Exception(f"File {file_id} not found")
 
         metadata_payload = {
             "document_id": f"task-{file_id}",
             "content": markdown_text,
             "filename": file_record.name,
         }
+
 
         metadata_response = asyncio.run(
             call_ai_service(
@@ -136,17 +140,17 @@ def extract_metadata_task(self, payload: dict):
         return {"status": "completed", "file_id": file_id}
 
     except Exception as e:
-        logger.error(
-            f"[FAILED] Metadata max retries exceeded file_id={payload['file_id']}"
-        )
+        logger.error(f"[FAILED] Metadata task file_id={file_id} error={str(e)}")
 
         db.rollback()
-        file_record = db.query(Files).filter(Files.id == payload["file_id"]).first()
+
+        file_record = db.query(Files).filter(Files.id == file_id).first()
         if file_record:
             file_record.status = "failed"
             db.commit()
 
-        raise e
+       
+        raise Exception(str(e))
 
     finally:
         db_gen.close()
