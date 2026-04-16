@@ -74,4 +74,9 @@ class Settings(BaseSettings):
     google_client_secret: str
     google_redirect_uri: str
 
+    #celery
+    CELERY_BROKER_URL: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
+    TEMP_STORAGE_PATH: str = "temp_storage"
+
 settings = Settings()
