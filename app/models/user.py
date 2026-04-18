@@ -25,3 +25,6 @@ class User(Base):
     identities = relationship(
         "UserIdentity", back_populates="user", cascade="all, delete-orphan"
     )
+    ai_credentials = relationship(
+        "AICredential", back_populates="user", cascade="all, delete-orphan"
+    )

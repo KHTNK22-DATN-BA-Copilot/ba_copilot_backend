@@ -5,12 +5,17 @@ import logging
 from fastapi import HTTPException, status
 from typing import Dict, Any, Optional
 
+from app.services.ai_credentials import resolve_ai_headers_for_user
+
 logger = logging.getLogger(__name__)
 
 
 async def call_ai_service(
     ai_service_url: str,
     payload: Dict[str, Any],
+    ai_provider: Optional[str] = None,
+    ai_model: Optional[str] = None,
+    ai_api_key: Optional[str] = None,
     retries: int = 3,
     connect_timeout: int = 10,
     read_timeout: int = 180,
@@ -34,8 +39,20 @@ async def call_ai_service(
                 f"Calling AI service (attempt {attempt}/{retries}) → {ai_service_url}"
             )
 
+            headers: Dict[str, str] = {}
+            if ai_provider:
+                headers["X-AI-Provider"] = ai_provider
+            if ai_model:
+                headers["X-AI-Model"] = ai_model
+            if ai_api_key:
+                headers["X-AI-API-Key"] = ai_api_key
+
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(ai_service_url, json=payload)
+                response = await client.post(
+                    ai_service_url,
+                    json=payload,
+                    headers=headers or None,
+                )
 
             # try:
             #     logger.info(f"AI Response json={response.json()}")
@@ -77,10 +94,7 @@ async def call_ai_service(
 
             if "error generating document" in lowered or "error code:" in lowered:
                 logger.error(f"AI logical error (wrapped 200): {content}")
-                raise HTTPException(
-                    status_code=502,
-                    detail=content
-                )
+                raise HTTPException(status_code=502, detail=content)
 
             return data
 
