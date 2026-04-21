@@ -30,6 +30,7 @@ class UploadedFileResponse(BaseResponseModel):
     size_kb: float
     type: str
     content: str
+    status: str =Field(...,description="Status handling file")
     created_at: datetime = Field(..., description="Timestamp when the file was created")
 
 

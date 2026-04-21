@@ -5,7 +5,8 @@ from typing import Optional, List
 
 class Settings(BaseSettings):
     model_config = ConfigDict(
-        env_file=".env", extra="ignore"  # Ignore extra fields in .env
+        env_file=".env",
+        extra="ignore",  # Ignore extra fields in .env
     )
 
     database_url: str
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     auto_verify_email: bool = True  # Auto-verify emails (skip email sending)
 
     secret_key: str
+    app_aes_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
@@ -73,5 +75,10 @@ class Settings(BaseSettings):
     google_client_id: str
     google_client_secret: str
     google_redirect_uri: str
+
+    #celery
+    CELERY_BROKER_URL: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
+    TEMP_STORAGE_PATH: str = "temp_storage"
 
 settings = Settings()

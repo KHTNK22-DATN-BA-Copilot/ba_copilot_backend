@@ -31,8 +31,6 @@ async def list_Session(
         .all()
     )
 
-
-
     result = []
     for session in session_list:
         message = ""

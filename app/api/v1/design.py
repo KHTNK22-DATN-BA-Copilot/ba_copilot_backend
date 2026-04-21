@@ -214,6 +214,7 @@ async def generate_design(
             design_type=design_type,
             status=new_file.status,
             recommend_documents=dependency_result["missing_recommended"],
+            # recommend_documents=[],
             file_size_kb=new_file.file_size,
         )
 

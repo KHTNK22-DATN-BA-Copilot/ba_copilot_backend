@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from app.api.v1 import (
     auth,
+    ai_credentials,
     oauth,
     user,
     wireframe,
@@ -16,7 +17,7 @@ from app.api.v1 import (
     analysis,
 )
 
-from app.api.v1.ws import planning_ws,design_ws,analysis_ws
+from app.api.v1.ws import planning_ws, design_ws, analysis_ws
 from app.core.database import engine, Base
 import logging
 import time
@@ -38,6 +39,9 @@ app = FastAPI(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(
+    ai_credentials.router, prefix="/api/v1/ai-credentials", tags=["ai_credentials"]
+)
 app.include_router(user.router, prefix="/api/v1/user", tags=["user"])
 app.include_router(srs.router, prefix="/api/v1/srs", tags=["srs_generator"])
 app.include_router(
@@ -49,15 +53,17 @@ app.include_router(files.router, prefix="/api/v1/files", tags=["file"])
 app.include_router(session.router, prefix="/api/v1/sessions", tags=["chat history"])
 app.include_router(folder.router, prefix="/api/v1/folders", tags=["folders"])
 
-app.include_router(design.router,prefix="/api/v1/design",tags=["design step"])
-app.include_router(planning.router,prefix="/api/v1/planning",tags=["planning step"])
-app.include_router(analysis.router,prefix="/api/v1/analysis",tags=["analysis"])
+app.include_router(design.router, prefix="/api/v1/design", tags=["design step"])
+app.include_router(planning.router, prefix="/api/v1/planning", tags=["planning step"])
+app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["analysis"])
 
-app.include_router(planning_ws.router,prefix="/api/v1",tags=["planning step websocket"])
 app.include_router(
-    design_ws.router, prefix="/api/v1", tags=["design step websocket"]
+    planning_ws.router, prefix="/api/v1", tags=["planning step websocket"]
 )
-app.include_router(analysis_ws.router, prefix="/api/v1", tags=["analysis step websocket"])
+app.include_router(design_ws.router, prefix="/api/v1", tags=["design step websocket"])
+app.include_router(
+    analysis_ws.router, prefix="/api/v1", tags=["analysis step websocket"]
+)
 
 # Oauth routes
 app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
@@ -97,9 +103,8 @@ async def startup_event():
                 raise e
             time.sleep(2)
 
-app.include_router(
-    one_click.router, prefix="/api/v1", tags=["one click flow"]
-)
+
+app.include_router(one_click.router, prefix="/api/v1", tags=["one click flow"])
 
 
 @app.get("/")
