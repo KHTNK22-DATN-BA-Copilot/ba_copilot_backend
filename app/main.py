@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from app.api.v1 import (
     auth,
     ai_credentials,
@@ -17,23 +19,56 @@ from app.api.v1 import (
     analysis,
 )
 
-from app.api.v1.ws import planning_ws, design_ws, analysis_ws
-from app.core.database import engine, Base
-import logging
-import time
-from fastapi.middleware.cors import CORSMiddleware
-
+from app.api.v1.ws import planning_ws, design_ws, analysis_ws, upload_file_notifier_ws
 from app.api.v1 import files
-
+from app.core.database import engine, Base
+from app.core.event_listener import redis_event_listener
+import logging
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+async def lifespan(app: FastAPI):
+    max_retries = 30
+    retry_count = 0
+
+    while retry_count < max_retries:
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables created successfully")
+            break
+        except Exception as e:
+            retry_count += 1
+            logger.warning(
+                f"Database connection attempt {retry_count} failed: {str(e)}"
+            )
+            if retry_count >= max_retries:
+                raise e
+            await asyncio.sleep(2)
+
+    listener_task = asyncio.create_task(redis_event_listener())
+    logger.info("Redis event listener started")
+
+    try:
+        yield
+    finally:
+        logger.info("Shutting down Redis listener...")
+
+        listener_task.cancel()
+        try:
+            await listener_task
+        except asyncio.CancelledError:
+            logger.info("Redis listener cancelled")
+
+
 app = FastAPI(
     title="BE Service - BA Copilot",
     description="Backend service that orchestrates FE requests, AI processing, and data persistence for BA Copilot.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -65,6 +100,12 @@ app.include_router(
     analysis_ws.router, prefix="/api/v1", tags=["analysis step websocket"]
 )
 
+app.include_router(
+    upload_file_notifier_ws.router,
+    prefix="/api/v1",
+    tags=["uploading file notifier websocket"],
+)
+
 # Oauth routes
 app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
 
@@ -81,27 +122,27 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup_event():
-    # Wait for database to be ready and create tables
-    max_retries = 30
-    retry_count = 0
+# @app.on_event("startup")
+# async def startup_event():
+#     # Wait for database to be ready and create tables
+#     max_retries = 30
+#     retry_count = 0
 
-    while retry_count < max_retries:
-        try:
-            # Try to create tables
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database tables created successfully")
-            break
-        except Exception as e:
-            retry_count += 1
-            logger.warning(
-                f"Database connection attempt {retry_count} failed: {str(e)}"
-            )
-            if retry_count >= max_retries:
-                logger.error("Max retries reached. Could not connect to database.")
-                raise e
-            time.sleep(2)
+#     while retry_count < max_retries:
+#         try:
+#             # Try to create tables
+#             Base.metadata.create_all(bind=engine)
+#             logger.info("Database tables created successfully")
+#             break
+#         except Exception as e:
+#             retry_count += 1
+#             logger.warning(
+#                 f"Database connection attempt {retry_count} failed: {str(e)}"
+#             )
+#             if retry_count >= max_retries:
+#                 logger.error("Max retries reached. Could not connect to database.")
+#                 raise e
+#             time.sleep(2)
 
 
 app.include_router(one_click.router, prefix="/api/v1", tags=["one click flow"])
