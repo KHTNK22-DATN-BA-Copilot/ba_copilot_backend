@@ -49,7 +49,7 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
             if not os.path.exists(temp_path):
                 raise Exception(f"Temp file not found: {temp_path}")
 
-            md_engine = MarkItDown(enable_plugins=False)
+            md_engine = MarkItDown(enable_plugins=True)
             result = md_engine.convert(temp_path)
 
             markdown_text = result.text_content
