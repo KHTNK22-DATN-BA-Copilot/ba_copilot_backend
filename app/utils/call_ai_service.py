@@ -9,6 +9,9 @@ from app.services.ai_credentials import resolve_ai_headers_for_user
 
 logger = logging.getLogger(__name__)
 
+GENERIC_AI_ERROR = (
+    "Something went wrong while processing your request. Please try again later."
+)
 
 async def call_ai_service(
     ai_service_url: str,
@@ -59,42 +62,28 @@ async def call_ai_service(
             # except Exception as e:
             #     logger.error(f"AI Response not json: {response.text}")
 
-            # ---------- HTTP LEVEL ----------
-            if response.status_code != 200:
-                if 400 <= response.status_code < 500:
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=response.text,
-                    )
-
-                last_error = f"Status {response.status_code}: {response.text}"
-                raise httpx.HTTPStatusError(
-                    message=last_error,
-                    request=response.request,
-                    response=response,
-                )
-
             # ---------- BODY LEVEL ----------
             try:
                 data = response.json()
             except Exception:
+                logger.error(f"AI returned non-JSON: {response.text}")
                 raise HTTPException(
                     status_code=502,
-                    detail="AI response is not valid JSON",
+                    detail=GENERIC_AI_ERROR,
                 )
-            ai_inner_res = data.get("response", {})
-            
-            content = ""
-            if isinstance(ai_inner_res, dict):
-                content = ai_inner_res.get("content", "")
-            elif isinstance(ai_inner_res, str):
-                content = ai_inner_res
 
-            lowered = content.lower()
+            ai_res = data.get("response")
 
-            if "error generating document" in lowered or "error code:" in lowered:
-                logger.error(f"AI logical error (wrapped 200): {content}")
-                raise HTTPException(status_code=502, detail=content)
+            summary = ai_res.get("summary", "AI Response")
+            content = ai_res.get("content")
+            inner_status = ai_res.get("status_code", 200)
+
+            if inner_status != 200:
+                logger.error(f"AI logical error: {content}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=GENERIC_AI_ERROR,
+                )
 
             return data
 
