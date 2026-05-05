@@ -12,8 +12,10 @@ from app.core.config import settings
 from app.utils.file_handling import upload_to_supabase
 from app.utils.call_ai_service import call_ai_service
 from app.utils.metadata_utils import create_user_upload_metadata
+from app.core.event_emitter import emitter
 
 logger = logging.getLogger(__name__)
+
 
 @celery_app.task(name="process_markdown_task", bind=True, max_retries=2)
 def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: str):
@@ -30,6 +32,16 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
         file_record.status = "processing"
         db.commit()
 
+        emitter.emit(
+            {
+                "project_id": file_record.project_id,
+                "step": "upload",
+                "type": "file_status",
+                "file_id": str(file_id),
+                "status": "processing",
+            }
+        )
+
         if file_record.extension == ".md":
             markdown_text = file_record.content
             md_url = file_record.storage_path
@@ -37,7 +49,7 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
             if not os.path.exists(temp_path):
                 raise Exception(f"Temp file not found: {temp_path}")
 
-            md_engine = MarkItDown(enable_plugins=False)
+            md_engine = MarkItDown(enable_plugins=True)
             result = md_engine.convert(temp_path)
 
             markdown_text = result.text_content
@@ -81,6 +93,16 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
                 file_record.status = "failed"
                 db.commit()
 
+            emitter.emit(
+                {
+                    "project_id": file_record.project_id,
+                    "step": "upload",
+                    "type": "file_status",
+                    "file_id": str(file_id),
+                    "status": "failed",
+                }
+            )
+            
             raise e
 
     finally:
@@ -111,7 +133,6 @@ def extract_metadata_task(self, payload: dict):
             "filename": file_record.name,
         }
 
-
         metadata_response = asyncio.run(
             call_ai_service(
                 ai_service_url=settings.ai_service_url_metadata_extraction,
@@ -135,6 +156,16 @@ def extract_metadata_task(self, payload: dict):
         file_record.status = "completed"
         db.commit()
 
+        emitter.emit(
+            {
+                "project_id": file_record.project_id,
+                "step": "upload",
+                "type": "file_status",
+                "file_id": str(file_id),
+                "status": "completed",
+            }
+        )
+
         logger.info(f"[SUCCESS] Metadata done file_id={file_id}")
 
         return {"status": "completed", "file_id": file_id}
@@ -149,7 +180,14 @@ def extract_metadata_task(self, payload: dict):
             file_record.status = "failed"
             db.commit()
 
-       
+        emitter.emit({
+            "project_id": file_record.project_id,
+            "step": "upload",
+            "type": "file_status",
+            "file_id": str(file_id),
+            "status": "failed",
+        })
+
         raise Exception(str(e))
 
     finally:
