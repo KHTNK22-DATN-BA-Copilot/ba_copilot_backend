@@ -13,6 +13,7 @@ from app.schemas.session import (
     ListSessionResponse,
     GetSessionResponse,
 )
+from app.utils.file_handling import extract_html_css_from_content, merge_html_css
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,7 +40,16 @@ async def list_Session(
         if session.role == "ai":
             try:
                 parsed = json.loads(session.message)
-                message = parsed.get("content") or ""
+                content = parsed.get("content")
+
+                if isinstance(content, dict):
+                    html_content, css_content = extract_html_css_from_content(content)
+                    message = merge_html_css(html_content, css_content or "")
+
+                elif isinstance(content, str):
+                    message = content
+                else:
+                    message = ""
                 summary = parsed.get("summary") or ""
             except:
                 message = session.message or ""
