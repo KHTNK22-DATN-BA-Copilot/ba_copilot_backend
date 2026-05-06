@@ -72,9 +72,22 @@ async def call_ai_service(
                     detail=GENERIC_AI_ERROR,
                 )
 
+            if response.status_code >= 400:
+                last_error = f"AI error: {data}"
+                logger.warning(last_error)
+
+                if attempt == retries:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=GENERIC_AI_ERROR,
+                    )
+                continue
+            
+            if data.get("type") == "metadata_extraction":
+                return data 
+            
             ai_res = data.get("response")
 
-            summary = ai_res.get("summary", "AI Response")
             content = ai_res.get("content")
             inner_status = ai_res.get("status_code", 200)
 
