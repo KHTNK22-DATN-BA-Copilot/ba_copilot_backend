@@ -24,6 +24,7 @@ from celery import chain
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+FILE_STATUS_COMPLETED = "completed"
 
 async def list_file(
     project_id: int,
@@ -35,6 +36,7 @@ async def list_file(
         .filter(
             Files.project_id == project_id,
             Files.created_by == current_user.id,
+            Files.status == FILE_STATUS_COMPLETED,
         )
         .order_by(Files.created_at.asc())
         .all()
