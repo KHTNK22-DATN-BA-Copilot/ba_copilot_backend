@@ -1,4 +1,3 @@
-
 import uuid
 from sqlalchemy import (
     Column,
@@ -37,7 +36,7 @@ class Files(Base):
     file_category = Column(String(50), nullable=False)
     file_type = Column(String(50), nullable=False)
     file_size = Column(Numeric(10, 2), nullable=True)
-    status = Column(String(32), nullable=False, default="success")
+    status = Column(String(32), nullable=False, default="completed")
 
     # Tương tự với JSONB, dùng JSON chuẩn nếu chạy bằng SQLite
     file_metadata = Column(
@@ -48,6 +47,3 @@ class Files(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-
-
-

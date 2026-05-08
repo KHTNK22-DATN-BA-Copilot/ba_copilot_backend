@@ -135,13 +135,14 @@ async def generate_design(
 
     ai_data = await call_ai_service(ai_url, ai_payload)
     ai_inner_response = ai_data.get("response", {})
+    ai_inner_content = ai_inner_response.get("content", {})
     html_content, css_content = extract_html_css_from_content(
-        json.dumps(ai_inner_response)
+        json.dumps(ai_inner_content)
     )
     if html_content:
         markdown_content = merge_html_css(html_content, css_content or "")
     else:
-        markdown_content = format_design_response(ai_inner_response)
+        markdown_content = ai_inner_content
 
     # 5. Upload lên Supabase
     file_name = f"{current_user.id}/{project_id}/{folder.name}/{unique_title}.md"
@@ -292,7 +293,6 @@ async def get_design_document(
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
     )
-
 
 
 @router.put("/update/{project_id}/{document_id}", response_model=UpdateDesignResponse)
