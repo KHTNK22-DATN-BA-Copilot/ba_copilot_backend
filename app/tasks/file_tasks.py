@@ -6,7 +6,7 @@ from fastapi import UploadFile
 from markitdown import MarkItDown
 
 from app.core.celery_app import celery_app
-from app.core.database import get_db
+from app.core.database import SessionLocal
 from app.models.file import Files
 from app.core.config import settings
 from app.utils.file_handling import upload_to_supabase
@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(name="process_markdown_task", bind=True, max_retries=2)
 def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: str):
-    db_gen = get_db()
-    db = next(db_gen)
-
+    db = SessionLocal()
     try:
         logger.info(f"[START] Markdown task file_id={file_id}")
 
@@ -113,10 +111,7 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
             raise e
 
     finally:
-        try:
-            next(db_gen, None)
-        except Exception:
-            pass
+        db.close()
 
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
@@ -124,8 +119,7 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
 
 @celery_app.task(name="extract_metadata_task", bind=True)
 def extract_metadata_task(self, payload: dict):
-    db_gen = get_db()
-    db = next(db_gen)
+    db = SessionLocal()
 
     file_id = payload.get("file_id")
 
@@ -204,7 +198,4 @@ def extract_metadata_task(self, payload: dict):
         raise Exception(str(e))
 
     finally:
-        try:
-            next(db_gen, None)
-        except Exception:
-            pass
+        db.close()
