@@ -80,10 +80,17 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
         }
 
     except Exception as e:
-        logger.error(f"[RETRY] Markdown failed file_id={file_id} error={str(e)}")
+        logger.error(
+            f"[RETRY] Markdown failed " f"file_id={file_id} " f"error={str(e)}"
+        )
+
+        db.rollback()
 
         try:
-            raise self.retry(exc=e, countdown=5)
+            raise self.retry(
+                exc=e,
+                countdown=5,
+            )
         except self.MaxRetriesExceededError:
             logger.error(f"[FAILED] Markdown max retries exceeded file_id={file_id}")
 
@@ -102,12 +109,16 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
                     "status": "failed",
                 }
             )
-            
+
             raise e
 
     finally:
-        db_gen.close()
-        if os.path.exists(temp_path):
+        try:
+            next(db_gen, None)
+        except Exception:
+            pass
+
+        if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
 
@@ -180,15 +191,20 @@ def extract_metadata_task(self, payload: dict):
             file_record.status = "failed"
             db.commit()
 
-        emitter.emit({
-            "project_id": file_record.project_id,
-            "step": "upload",
-            "type": "file_status",
-            "file_id": str(file_id),
-            "status": "failed",
-        })
+        emitter.emit(
+            {
+                "project_id": file_record.project_id,
+                "step": "upload",
+                "type": "file_status",
+                "file_id": str(file_id),
+                "status": "failed",
+            }
+        )
 
         raise Exception(str(e))
 
     finally:
-        db_gen.close()
+        try:
+            next(db_gen, None)
+        except Exception:
+            pass
