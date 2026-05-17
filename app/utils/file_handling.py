@@ -30,7 +30,9 @@ def sanitize_filename(filename: str) -> str:
     return f"{name}{ext}"
 
 
-async def upload_to_supabase(file: UploadFile,new_name:str|None=None) -> str | None:
+async def upload_to_supabase(
+    file: UploadFile, new_name: str | None = None
+) -> str | None:
     """Upload file lên Supabase và trả về public URL."""
     try:
         filename_to_use = new_name if new_name else file.filename
@@ -86,11 +88,22 @@ async def list_file_from_supabase(existing_files_db: List):
     return existing_files_uploadfile
 
 
-async def update_file_from_supabase(file_path: str,file: UploadFile) -> str | None:
+async def download_file_from_supabase(file_path: str):
+    try:
+        file_bytes = supabase.storage.from_(SUPABASE_BUCKET).download(file_path)
+
+        return io.BytesIO(file_bytes)
+
+    except Exception as e:
+        logger.exception(f"Error when getting file '{file_path}': {e}")
+        raise
+
+
+async def update_file_from_supabase(file_path: str, file: UploadFile) -> str | None:
 
     file_data = await file.read()
     try:
-        res = supabase.storage.from_(SUPABASE_BUCKET).update(file_path,file_data)
+        res = supabase.storage.from_(SUPABASE_BUCKET).update(file_path, file_data)
         return res.path
 
     except Exception as e:
@@ -133,15 +146,13 @@ def extract_text_from_binary(binary_content: bytes, suffix: str) -> str:
             doc = docx.Document(io.BytesIO(binary_content))
             extracted_lines = []
 
-           
             for para in doc.paragraphs:
                 if para.text.strip():
                     extracted_lines.append(para.text.strip())
 
-            
             for table in doc.tables:
                 for row in table.rows:
-                   
+
                     row_data = [
                         cell.text.strip() for cell in row.cells if cell.text.strip()
                     ]
