@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
 
+    openai_api_key: Optional[str] = None
+    openai_embedding_model: str = "text-embedding-3-large"
+
+    rag_chunk_size: int = 1200
+    rag_chunk_overlap: int = 200
+    rag_embed_batch_size: int = 64
+
     ai_service_url_srs: str
     ai_service_url_wireframe: str
     ai_service_url_diagram_usecase: str
@@ -70,6 +77,7 @@ class Settings(BaseSettings):
 
     # Metadata extraction service
     ai_service_url_metadata_extraction: str = "http://ai:8000/api/v1/metadata/extract"
+    ai_service_url_rag_index: str = "http://ai:8000/api/v1/rag/index"
 
     # Google OAuth2 config
     google_client_id: str
