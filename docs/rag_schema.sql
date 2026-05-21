@@ -6,16 +6,13 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     file_id UUID NOT NULL,
     project_id INTEGER NOT NULL,
-    storage_key TEXT NOT NULL,
+    document_type TEXT NOT NULL,
     chunk_index INTEGER NOT NULL,
     content TEXT NOT NULL,
     token_count INTEGER,
     embedding VECTOR(3072) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS rag_chunks_storage_key_idx
-    ON rag_chunks (storage_key);
 
 CREATE INDEX IF NOT EXISTS rag_chunks_project_id_idx
     ON rag_chunks (project_id);
@@ -37,7 +34,7 @@ RETURNS TABLE (
     id UUID,
     file_id UUID,
     project_id INTEGER,
-    storage_key TEXT,
+    document_type TEXT,
     chunk_index INTEGER,
     content TEXT,
     token_count INTEGER,
@@ -50,7 +47,7 @@ BEGIN
         rag_chunks.id,
                 rag_chunks.file_id,
         rag_chunks.project_id,
-                rag_chunks.storage_key,
+            rag_chunks.document_type,
         rag_chunks.chunk_index,
         rag_chunks.content,
         rag_chunks.token_count,
