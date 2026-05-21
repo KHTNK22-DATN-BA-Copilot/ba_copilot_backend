@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     openai_embedding_model: str = "text-embedding-3-large"
 
-    rag_chunk_size: int = 1200
-    rag_chunk_overlap: int = 200
+    rag_chunk_size: int = 500
+    rag_chunk_overlap: int = 70
     rag_embed_batch_size: int = 64
 
     ai_service_url_srs: str

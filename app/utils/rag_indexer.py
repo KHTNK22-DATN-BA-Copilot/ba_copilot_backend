@@ -1,5 +1,6 @@
 import logging
-from typing import Iterable, List
+import re
+from typing import Iterable, List, Optional
 
 from openai import OpenAI
 from sqlalchemy import text
@@ -10,7 +11,127 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_text(text: str) -> str:
-    return "\n".join(line.strip() for line in text.splitlines()).strip()
+    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
+
+
+def _get_token_encoder():
+    try:
+        import tiktoken
+
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception:
+        return None
+
+
+def _count_tokens(text: str) -> int:
+    if not text:
+        return 0
+
+    encoder = _get_token_encoder()
+    if encoder is not None:
+        return len(encoder.encode(text))
+
+    # Fallback approximation: 4 chars per token.
+    return max(1, len(text) // 4)
+
+
+def _trim_to_tokens(text: str, max_tokens: int) -> str:
+    if max_tokens <= 0 or not text:
+        return ""
+
+    encoder = _get_token_encoder()
+    if encoder is not None:
+        tokens = encoder.encode(text)
+        return encoder.decode(tokens[:max_tokens])
+
+    approx_len = max_tokens * 4
+    return text[:approx_len]
+
+
+def _last_tokens(text: str, token_count: int) -> str:
+    if token_count <= 0 or not text:
+        return ""
+
+    encoder = _get_token_encoder()
+    if encoder is not None:
+        tokens = encoder.encode(text)
+        return encoder.decode(tokens[-token_count:])
+
+    words = text.split()
+    return " ".join(words[-token_count:])
+
+
+def _split_paragraphs(text: str) -> List[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n+", text) if p.strip()]
+
+
+def _split_sentences(text: str) -> List[str]:
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [s.strip() for s in sentences if s.strip()]
+
+
+def _split_words(text: str) -> List[str]:
+    return [w for w in re.split(r"\s+", text.strip()) if w]
+
+
+def _split_units(
+    units: List[str],
+    *,
+    max_tokens: int,
+    joiner: str,
+    next_splitter: Optional[callable],
+    next_joiner: str,
+    fallback_splitter: Optional[callable],
+) -> List[str]:
+    chunks: List[str] = []
+    current: List[str] = []
+
+    for unit in units:
+        unit_tokens = _count_tokens(unit)
+
+        if unit_tokens > max_tokens and next_splitter is not None:
+            sub_units = next_splitter(unit)
+            sub_chunks = _split_units(
+                sub_units,
+                max_tokens=max_tokens,
+                joiner=next_joiner,
+                next_splitter=fallback_splitter,
+                next_joiner=" ",
+                fallback_splitter=None,
+            )
+            chunks.extend(sub_chunks)
+            continue
+
+        if unit_tokens > max_tokens and next_splitter is None:
+            chunks.append(_trim_to_tokens(unit, max_tokens))
+            continue
+
+        candidate = joiner.join(current + [unit]) if current else unit
+        if _count_tokens(candidate) <= max_tokens:
+            current.append(unit)
+            continue
+
+        if current:
+            chunks.append(joiner.join(current).strip())
+        current = [unit]
+
+    if current:
+        chunks.append(joiner.join(current).strip())
+
+    return chunks
+
+
+def _apply_overlap(chunks: List[str], *, max_tokens: int, overlap_tokens: int) -> List[str]:
+    if overlap_tokens <= 0 or not chunks:
+        return chunks
+
+    overlapped = [chunks[0]]
+    for chunk in chunks[1:]:
+        prefix = _last_tokens(overlapped[-1], overlap_tokens)
+        merged = f"{prefix} {chunk}".strip() if prefix else chunk
+        overlapped.append(_trim_to_tokens(merged, max_tokens))
+
+    return overlapped
 
 
 def _chunk_text(text: str, chunk_size: int, overlap: int) -> List[str]:
@@ -25,26 +146,21 @@ def _chunk_text(text: str, chunk_size: int, overlap: int) -> List[str]:
     if not normalized:
         return []
 
-    chunks: List[str] = []
-    start = 0
-    length = len(normalized)
+    paragraphs = _split_paragraphs(normalized)
+    chunks = _split_units(
+        paragraphs,
+        max_tokens=chunk_size,
+        joiner="\n\n",
+        next_splitter=_split_sentences,
+        next_joiner=" ",
+        fallback_splitter=_split_words,
+    )
 
-    while start < length:
-        end = min(start + chunk_size, length)
-        chunk = normalized[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        start = end - overlap
-        if start < 0:
-            start = 0
-        if start >= length:
-            break
-
-    return chunks
+    return _apply_overlap(chunks, max_tokens=chunk_size, overlap_tokens=overlap)
 
 
 def _estimate_tokens(text: str) -> int:
-    return len(text.split())
+    return _count_tokens(text)
 
 
 def _batch(iterable: List[str], batch_size: int) -> Iterable[List[str]]:
