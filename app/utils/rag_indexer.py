@@ -186,7 +186,7 @@ def index_rag_chunks(
     *,
     file_id: str,
     project_id: int,
-    storage_key: str,
+    document_type: str,
     markdown_text: str,
 ) -> int:
     chunks = _chunk_text(
@@ -210,7 +210,7 @@ def index_rag_chunks(
             id,
             file_id,
             project_id,
-            storage_key,
+            document_type,
             chunk_index,
             content,
             token_count,
@@ -221,7 +221,7 @@ def index_rag_chunks(
             gen_random_uuid(),
             :file_id,
             :project_id,
-            :storage_key,
+            :document_type,
             :chunk_index,
             :content,
             :token_count,
@@ -248,7 +248,7 @@ def index_rag_chunks(
                 {
                     "file_id": file_id,
                     "project_id": project_id,
-                    "storage_key": storage_key,
+                    "document_type": document_type,
                     "chunk_index": chunk_index,
                     "content": chunk_text,
                     "token_count": token_count,

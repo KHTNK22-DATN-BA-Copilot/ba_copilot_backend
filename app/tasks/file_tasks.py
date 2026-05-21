@@ -11,7 +11,7 @@ from app.models.file import Files
 from app.core.config import settings
 from app.utils.file_handling import upload_to_supabase
 from app.utils.call_ai_service import call_ai_service
-from app.utils.metadata_utils import create_user_upload_metadata
+from app.utils.metadata_utils import create_user_upload_metadata, get_detected_types
 from app.utils.rag_indexer import index_rag_chunks
 from app.core.event_emitter import emitter
 
@@ -216,13 +216,15 @@ def index_rag_task(self, payload: dict):
         if not file_record:
             return payload
 
-        storage_key = file_record.storage_md_path or file_record.storage_path
+        metadata = file_record.file_metadata or {}
+        detected_types = get_detected_types(metadata)
+        document_type = metadata.get("primary_type") or (detected_types[0] if detected_types else "unknown")
 
         inserted = index_rag_chunks(
             db,
             file_id=str(file_record.id),
             project_id=file_record.project_id,
-            storage_key=storage_key or "",
+            document_type=document_type,
             markdown_text=markdown_text,
         )
 
