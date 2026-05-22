@@ -142,6 +142,8 @@ def extract_metadata_task(self, payload: dict):
             call_ai_service(
                 ai_service_url=settings.ai_service_url_metadata_extraction,
                 payload=metadata_payload,
+                db=db,
+                user_id=file_record.created_by,
             )
         )
 

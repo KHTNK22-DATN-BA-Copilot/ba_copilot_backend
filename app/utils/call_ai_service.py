@@ -4,7 +4,7 @@ import httpx
 import logging
 from fastapi import HTTPException, status
 from typing import Dict, Any, Optional
-
+from sqlalchemy.orm import Session
 from app.services.ai_credentials import resolve_ai_headers_for_user
 
 logger = logging.getLogger(__name__)
@@ -13,12 +13,32 @@ GENERIC_AI_ERROR = (
     "Something went wrong while processing your request. Please try again later."
 )
 
+
+# helper function to detect quota errors in AI responses
+def _is_quota_or_token_error(data: Any) -> bool:
+    text = str(data or "").lower()
+    keywords = (
+        "quota",
+        "insufficient_quota",
+        "resource_exhausted",
+        "rate limit",
+        "rate_limit",
+        "too many requests",
+        "token limit",
+        "tokens",
+        "billing",
+        "credit",
+        "credits",
+        "exceeded",
+    )
+    return any(keyword in text for keyword in keywords)
+
+
 async def call_ai_service(
     ai_service_url: str,
     payload: Dict[str, Any],
-    ai_provider: Optional[str] = None,
-    ai_model: Optional[str] = None,
-    ai_api_key: Optional[str] = None,
+    db: Optional[Session] = None,
+    user_id: Optional[int] = None,
     retries: int = 3,
     connect_timeout: int = 10,
     read_timeout: int = 180,
@@ -32,6 +52,12 @@ async def call_ai_service(
         pool=10,
     )
 
+    headers: Dict[str, str] = {}
+    if db and user_id:
+        ai_headers = resolve_ai_headers_for_user(db, user_id)
+        if ai_headers:
+            headers.update(ai_headers)
+
     for attempt in range(1, retries + 1):
         if asyncio.current_task() and asyncio.current_task().cancelled():
             logger.info(f"Task cancelled before attempt {attempt}")
@@ -41,14 +67,6 @@ async def call_ai_service(
             logger.info(
                 f"Calling AI service (attempt {attempt}/{retries}) → {ai_service_url}"
             )
-
-            headers: Dict[str, str] = {}
-            if ai_provider:
-                headers["X-AI-Provider"] = ai_provider
-            if ai_model:
-                headers["X-AI-Model"] = ai_model
-            if ai_api_key:
-                headers["X-AI-API-Key"] = ai_api_key
 
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
@@ -75,6 +93,11 @@ async def call_ai_service(
             if response.status_code >= 400:
                 last_error = f"AI error: {data}"
                 logger.warning(last_error)
+                if _is_quota_or_token_error(data):
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="AI service error: quota exceeded or token limit reached",
+                    )
 
                 if attempt == retries:
                     raise HTTPException(
@@ -82,10 +105,10 @@ async def call_ai_service(
                         detail=GENERIC_AI_ERROR,
                     )
                 continue
-            
+
             if data.get("type") == "metadata_extraction":
-                return data 
-            
+                return data
+
             ai_res = data.get("response")
 
             content = ai_res.get("content")
@@ -93,6 +116,14 @@ async def call_ai_service(
 
             if inner_status != 200:
                 logger.error(f"AI logical error: {content}")
+                if _is_quota_or_token_error(content):
+                    logger.warning(
+                        f"AI quota/token error detected in content: {content}"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="AI service error: quota exceeded or token limit reached",
+                    )
                 raise HTTPException(
                     status_code=502,
                     detail=GENERIC_AI_ERROR,
