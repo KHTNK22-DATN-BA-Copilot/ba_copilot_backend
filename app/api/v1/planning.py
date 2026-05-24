@@ -100,7 +100,12 @@ async def generate_planning_doc(
     file_urls = await list_file(project_id, db, current_user)
     ai_payload = {"message": description, "storage_paths": file_urls}
 
-    ai_data = await call_ai_service(ai_url, ai_payload)
+    ai_data = await call_ai_service(
+        ai_url,
+        ai_payload,
+        db=db,
+        user_id=current_user.id,
+    )
 
     # Xử lý response từ AI (giả sử AI trả về {"response": {...}})
     ai_inner_resp = ai_data.get("response", {})
@@ -343,7 +348,12 @@ async def regenerate_planning_doc(
         "storage_paths": file_urls,
     }
 
-    ai_data = await call_ai_service(get_ai_endpoint(doc.file_type), ai_payload)
+    ai_data = await call_ai_service(
+        get_ai_endpoint(doc.file_type),
+        ai_payload,
+        db=db,
+        user_id=current_user.id,
+    )
     ai_inner = ai_data.get("response", {})
     content = format_response(ai_inner)
 
