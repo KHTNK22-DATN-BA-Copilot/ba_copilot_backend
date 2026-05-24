@@ -1,9 +1,12 @@
-from io import BytesIO
-from typing import List
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 import tempfile
 import os
 import logging
+import mimetypes
+
+from io import BytesIO
+from typing import List
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
+
 from fastapi.responses import StreamingResponse
 from markitdown import MarkItDown
 from sqlalchemy.orm import Session
@@ -13,18 +16,26 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.file import Files
 from app.models.user import User
-from app.utils.file_handling import has_extension, upload_to_supabase, delete_file_from_supabase,extract_text_from_binary
+from app.utils.file_handling import (
+    has_extension,
+    upload_to_supabase,
+    delete_file_from_supabase,
+    extract_text_from_binary,
+    download_file_from_supabase,
+)
 from app.schemas.file import UploadedFileResponse, UploadResponse
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
-from app.tasks.file_tasks import extract_metadata_task,process_markdown_task
+from app.tasks.file_tasks import extract_metadata_task, process_markdown_task
 from celery import chain
+from urllib.parse import quote
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 FILE_STATUS_COMPLETED = "completed"
+
 
 async def list_file(
     project_id: int,
@@ -124,7 +135,6 @@ async def upload(
                 if not raw_url:
                     raise Exception(f"Failed to upload raw file {file.filename}")
 
-
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
@@ -187,37 +197,58 @@ async def upload(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/export/{document_id}", response_class=StreamingResponse)
+@router.get("/export/{document_id}")
 async def export_markdown(
-   
     document_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Export file from Supabase Storage
+    """
 
-    doc = (
-        db.query(Files)
-        .filter(
-            Files.id == document_id,
-        )
-        .first()
-    )
+    doc = db.query(Files).filter(Files.id == document_id).first()
+
     if not doc:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(
+            status_code=404,
+            detail="File not found",
+        )
 
     if current_user.id != doc.created_by:
         raise HTTPException(
-            status_code=403, detail="You don't have permission to access this document."
+            status_code=403,
+            detail="You don't have permission to access this document.",
         )
 
-    file_stream = BytesIO(doc.content.encode("utf-8"))
-    filename = f"{doc.name.replace(' ', '_')}.{doc.extension}"
+    try:
+        file_stream = await download_file_from_supabase(doc.storage_path)
 
-    return StreamingResponse(
-        file_stream,
-        media_type="text/markdown",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+        filename = f"{doc.name}{doc.extension}"
+
+        media_type, _ = mimetypes.guess_type(filename)
+
+        if not media_type:
+            media_type = "application/octet-stream"
+
+        return StreamingResponse(
+            file_stream,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"
+            },
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.exception(f"Error when exporting document '{document_id}': {e}")
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to export file",
+        )
 
 
 @router.delete("/{file_id}", status_code=200)

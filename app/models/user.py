@@ -16,6 +16,10 @@ class User(Base):
     email_verification_expiration = Column(DateTime(timezone=True), nullable=True)
     reset_code = Column(String(255), nullable=True)
     reset_code_expiration = Column(DateTime(timezone=True), nullable=True)
+    onboard_dashboard = Column(Boolean, default=False)
+    onboard_project = Column(Boolean, default=False)
+    onboard_file = Column(Boolean, default=False)
+    onboard_workflow = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
