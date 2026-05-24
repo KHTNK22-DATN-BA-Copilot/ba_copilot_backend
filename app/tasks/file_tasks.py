@@ -7,6 +7,7 @@ from markitdown import MarkItDown
 
 from app.core.celery_app import celery_app
 from app.core.database import get_db
+from app.core.rag_database import get_rag_db
 from app.models.file import Files
 from app.core.config import settings
 from app.utils.file_handling import upload_to_supabase
@@ -174,7 +175,9 @@ def extract_metadata_task(self, payload: dict):
 
         logger.info(f"[SUCCESS] Metadata done file_id={file_id}")
 
-        return {"status": "completed", "file_id": file_id}
+        # Include md_text in returned payload so downstream tasks (indexing)
+        # can access the markdown content without re-downloading.
+        return {"status": "completed", "file_id": file_id, "md_text": markdown_text}
 
     except Exception as e:
         logger.error(f"[FAILED] Metadata task file_id={file_id} error={str(e)}")
@@ -202,8 +205,10 @@ def extract_metadata_task(self, payload: dict):
 
 @celery_app.task(name="index_rag_task", bind=True)
 def index_rag_task(self, payload: dict):
-    db_gen = get_db()
-    db = next(db_gen)
+    local_db_gen = get_db()
+    local_db = next(local_db_gen)
+    rag_db_gen = get_rag_db()
+    rag_db = next(rag_db_gen)
 
     file_id = payload.get("file_id")
 
@@ -212,7 +217,7 @@ def index_rag_task(self, payload: dict):
         if not markdown_text or not file_id:
             return payload
 
-        file_record = db.query(Files).filter(Files.id == file_id).first()
+        file_record = local_db.query(Files).filter(Files.id == file_id).first()
         if not file_record:
             return payload
 
@@ -221,20 +226,21 @@ def index_rag_task(self, payload: dict):
         document_type = metadata.get("primary_type") or (detected_types[0] if detected_types else "unknown")
 
         inserted = index_rag_chunks(
-            db,
+            rag_db,
             file_id=str(file_record.id),
             project_id=file_record.project_id,
             document_type=document_type,
             markdown_text=markdown_text,
         )
 
-        db.commit()
+        rag_db.commit()
         payload["rag_indexed"] = inserted > 0
         return payload
     except Exception as e:
         logger.error(f"RAG index failed file_id={file_id} error={str(e)}")
         payload["rag_indexed"] = False
-        db.rollback()
-        return payload
+        rag_db.rollback()
+        raise Exception(str(e))
     finally:
-        db_gen.close()
+        local_db_gen.close()
+        rag_db_gen.close()

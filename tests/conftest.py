@@ -1,4 +1,45 @@
 import pytest
+import sys
+import types
+
+# Provide a lightweight stub for 'mailersend' used by app.core.mailer so tests
+# can import app without installing external dependency.
+mailersend_stub = types.ModuleType("mailersend")
+mailersend_stub.MailerSendClient = lambda *a, **k: None
+mailersend_stub.EmailBuilder = lambda *a, **k: None
+exceptions_mod = types.ModuleType("mailersend.exceptions")
+class MailerSendError(Exception):
+    pass
+exceptions_mod.MailerSendError = MailerSendError
+mailersend_stub.exceptions = exceptions_mod
+sys.modules["mailersend"] = mailersend_stub
+sys.modules["mailersend.exceptions"] = exceptions_mod
+
+# Provide a minimal 'celery' stub so importing app doesn't require celery installed.
+celery_mod = types.ModuleType("celery")
+
+class DummyCeleryApp:
+    def __init__(self, *a, **k):
+        self.conf = {}
+
+    def task(self, *args, **kwargs):
+        def _decorator(f):
+            return f
+
+        return _decorator
+
+
+def _chain_stub(*args, **kwargs):
+    class _Canvas:
+        def apply_async(self, *a, **k):
+            return None
+
+    return _Canvas()
+
+
+celery_mod.Celery = DummyCeleryApp
+celery_mod.chain = _chain_stub
+sys.modules["celery"] = celery_mod
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

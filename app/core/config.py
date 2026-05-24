@@ -1,6 +1,12 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import Optional, List
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+apiKey = os.getenv("OPENAI_API_KEY", None)
+print(f"OPENAI_API_KEY: {apiKey[:5]}...") 
 
 
 class Settings(BaseSettings):
@@ -36,9 +42,11 @@ class Settings(BaseSettings):
 
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
+    rag_database_url: Optional[str] = os.getenv("RAG_DATABASE_URL")
 
-    openai_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY", None)
     openai_embedding_model: str = "text-embedding-3-large"
+    openai_url: str = os.getenv("OPENROUTER_BASE_URL")
 
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 70

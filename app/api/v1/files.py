@@ -26,7 +26,7 @@ from app.utils.file_handling import (
 from app.schemas.file import UploadedFileResponse, UploadResponse
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
-from app.tasks.file_tasks import extract_metadata_task, process_markdown_task
+from app.tasks.file_tasks import extract_metadata_task, process_markdown_task, index_rag_task
 from celery import chain
 from urllib.parse import quote
 
@@ -173,6 +173,7 @@ async def upload(
             chain(
                 process_markdown_task.s(str(raw_record.id), temp_path, path),
                 extract_metadata_task.s(),
+                index_rag_task.s(),
             ).apply_async()
 
             upload_files.append(

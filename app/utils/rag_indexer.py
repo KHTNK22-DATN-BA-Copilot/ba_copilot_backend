@@ -172,10 +172,13 @@ def _embed_texts(texts: List[str]) -> List[List[float]]:
     if not texts:
         return []
 
-    client = OpenAI(api_key=settings.openai_api_key or None)
+    client = OpenAI(
+        base_url=settings.openai_url, 
+        api_key=settings.openai_api_key or None)
     response = client.embeddings.create(
         model=settings.openai_embedding_model,
         input=texts,
+        dimensions=1536
     )
 
     return [item.embedding for item in response.data]
@@ -225,7 +228,7 @@ def index_rag_chunks(
             :chunk_index,
             :content,
             :token_count,
-            :embedding::vector,
+            CAST(:embedding AS vector),
             NOW()
         )
         """

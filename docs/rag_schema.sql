@@ -1,4 +1,5 @@
--- Enable pgvector
+-- Enable extensions required for RAG on Supabase/Postgres.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Table for RAG chunks
