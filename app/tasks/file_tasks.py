@@ -159,9 +159,12 @@ def extract_metadata_task(self, payload: dict):
         if not file_metadata:
             raise Exception("Metadata creation failed")
 
+        file_record.file_type = file_metadata['file_type']
         file_record.file_metadata = file_metadata
         file_record.status = "completed"
         db.commit()
+        print("DEBUGGING file_record: ", file_record)
+        print("DEBUGGING file_record['file_type']: ", file_record.file_type)
 
         emitter.emit(
             {
