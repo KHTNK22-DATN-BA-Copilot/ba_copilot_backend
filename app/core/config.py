@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     rag_database_url: Optional[str] = os.getenv("RAG_DATABASE_URL")
 
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY", None)
-    openai_embedding_model: str = "text-embedding-3-large"
+    openai_embedding_model: str = "text-embedding-3-small"
     openai_url: str = os.getenv("OPENROUTER_BASE_URL")
 
     rag_chunk_size: int = 500
