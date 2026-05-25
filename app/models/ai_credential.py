@@ -5,11 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Text,
-    JSON,
-    Index,
-    text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -25,9 +21,6 @@ class AICredential(Base):
     encrypted_api_key = Column(Text, nullable=False)
     iv = Column(String(255), nullable=False)
     auth_tag = Column(String(255), nullable=False)
-    models_json = Column(
-        JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=list
-    )
     current_model = Column(String(100), nullable=True)
     status = Column(String(20), nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

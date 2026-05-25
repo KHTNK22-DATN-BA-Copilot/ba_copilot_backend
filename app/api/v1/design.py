@@ -133,7 +133,12 @@ async def generate_design(
 
     generate_at = datetime.now(timezone.utc)
 
-    ai_data = await call_ai_service(ai_url, ai_payload)
+    ai_data = await call_ai_service(
+        ai_url,
+        ai_payload,
+        db=db,
+        user_id=current_user.id,
+    )
     ai_inner_response = ai_data.get("response", {})
     ai_inner_content = ai_inner_response.get("content", {})
     html_content, css_content = extract_html_css_from_content(
@@ -406,7 +411,12 @@ async def regenerate_design(
         "storage_paths": file_urls,
     }
 
-    ai_data = await call_ai_service(ai_url, ai_payload)
+    ai_data = await call_ai_service(
+        ai_url,
+        ai_payload,
+        db=db,
+        user_id=current_user.id,
+    )
     ai_inner_response = ai_data.get("response", {})
     markdown_content = format_design_response(ai_inner_response)
 

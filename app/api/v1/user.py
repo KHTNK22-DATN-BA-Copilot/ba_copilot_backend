@@ -12,8 +12,7 @@ router = APIRouter()
 
 @router.get("/me", response_model=UserResponse)
 def get_user_profile(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Lấy thông tin profile của người dùng đang đăng nhập
@@ -21,11 +20,11 @@ def get_user_profile(
     return current_user
 
 
-@router.put("/me", response_model=UserResponse)
+@router.patch("/me", response_model=UserResponse)
 def update_user_profile(
     user_update: UserUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Cập nhật thông tin profile của người dùng đang đăng nhập
@@ -36,13 +35,25 @@ def update_user_profile(
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
             )
         current_user.email = user_update.email
 
     # Cập nhật name nếu có
     if user_update.name:
         current_user.name = user_update.name
+
+    if user_update.onboard_dashboard is not None:
+        current_user.onboard_dashboard = user_update.onboard_dashboard
+
+    if user_update.onboard_project is not None:
+        current_user.onboard_project = user_update.onboard_project
+
+    if user_update.onboard_file is not None:
+        current_user.onboard_file = user_update.onboard_file
+
+    if user_update.onboard_workflow is not None:
+        current_user.onboard_workflow = user_update.onboard_workflow
 
     # Cập nhật thời gian
     current_user.updated_at = datetime.utcnow()
@@ -55,8 +66,7 @@ def update_user_profile(
 
 @router.delete("/me", response_model=UserDeleteResponse)
 def delete_user_account(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Xóa tài khoản của người dùng đang đăng nhập
