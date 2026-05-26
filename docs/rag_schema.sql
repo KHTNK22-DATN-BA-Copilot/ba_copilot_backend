@@ -15,15 +15,6 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS rag_chunks_project_id_idx
-    ON rag_chunks (project_id);
-
-CREATE INDEX IF NOT EXISTS rag_chunks_file_id_idx
-    ON rag_chunks (file_id);
-
-CREATE INDEX IF NOT EXISTS rag_chunks_embedding_idx
-    ON rag_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-
 -- RPC for similarity search
 CREATE OR REPLACE FUNCTION match_rag_chunks(
     query_embedding VECTOR(3072),
