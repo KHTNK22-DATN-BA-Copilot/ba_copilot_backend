@@ -151,7 +151,7 @@ def parse_metadata_response(response: Dict[str, Any]) -> str:
     #                 "line_start": item.get("line_start", -1),
     #                 "line_end": item.get("line_end", -1)
     #             }
-    file_type = response.get("response", "other")
+    file_type = response.get("response", "stakeholder_requirements")
     return file_type
 
 
