@@ -18,6 +18,13 @@ from app.api.v1 import (
     planning,
     analysis,
 )
+from app.api.v2 import (
+    files as v2_files,
+    folders as v2_folders,
+    project_members as v2_project_members,
+    projects as v2_projects,
+    roles as v2_roles,
+)
 
 from app.api.v1.ws import planning_ws, design_ws, analysis_ws, upload_file_notifier_ws
 from app.api.v1 import files
@@ -147,6 +154,16 @@ app.add_middleware(
 
 
 app.include_router(one_click.router, prefix="/api/v1", tags=["one click flow"])
+
+app.include_router(v2_projects.router, prefix="/api/v2/projects", tags=["v2 projects"])
+app.include_router(
+    v2_project_members.router,
+    prefix="/api/v2/projects",
+    tags=["v2 project members"],
+)
+app.include_router(v2_folders.router, prefix="/api/v2/projects", tags=["v2 folders"])
+app.include_router(v2_files.router, prefix="/api/v2/projects", tags=["v2 files"])
+app.include_router(v2_roles.router, prefix="/api/v2/roles", tags=["v2 roles"])
 
 
 @app.get("/")
