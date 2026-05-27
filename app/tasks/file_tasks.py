@@ -225,6 +225,17 @@ def index_rag_task(self, payload: dict):
         detected_types = get_detected_types(metadata)
         document_type = metadata.get("primary_type") or (detected_types[0] if detected_types else "unknown")
 
+        emitter.emit(
+            {
+                "project_id": file_record.project_id,
+                "step": "rag",
+                "type": "rag_status",
+                "file_id": str(file_record.id),
+                "document_type": document_type,
+                "status": "processing",
+            }
+        )
+
         inserted = index_rag_chunks(
             rag_db,
             file_id=str(file_record.id),
@@ -235,11 +246,42 @@ def index_rag_task(self, payload: dict):
 
         rag_db.commit()
         payload["rag_indexed"] = inserted > 0
+
+        emitter.emit(
+            {
+                "project_id": file_record.project_id,
+                "step": "rag",
+                "type": "rag_status",
+                "file_id": str(file_record.id),
+                "document_type": document_type,
+                "status": "completed",
+                "chunks": inserted,
+            }
+        )
         return payload
     except Exception as e:
         logger.error(f"RAG index failed file_id={file_id} error={str(e)}")
         payload["rag_indexed"] = False
         rag_db.rollback()
+
+        if file_id:
+            file_record = local_db.query(Files).filter(Files.id == file_id).first()
+            if file_record:
+                emitter.emit(
+                    {
+                        "project_id": file_record.project_id,
+                        "step": "rag",
+                        "type": "rag_status",
+                        "file_id": str(file_record.id),
+                        "document_type": (file_record.file_metadata or {}).get(
+                            "primary_type",
+                            "unknown",
+                        ),
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
+
         raise Exception(str(e))
     finally:
         local_db_gen.close()
