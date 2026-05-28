@@ -16,6 +16,7 @@ from app.core.security import verify_token
 
 from app.api.v1.planning import generate_planning_doc
 from app.api.v1.design import generate_design
+from app.services.rag_postprocess import queue_rag_indexing
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -119,6 +120,14 @@ async def websocket_generate_step(
                     "doc_type": doc_type,
                     "data": res,
                 }
+            )
+
+            await queue_rag_indexing(
+                step=step,
+                file_id=result.document_id,
+                doc_type=doc_type,
+                markdown_text=result.document,
+                emit_event=websocket.send_json,
             )
 
         except HTTPException as e:

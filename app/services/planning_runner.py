@@ -5,6 +5,7 @@ from app.api.v1.planning import (
 )  
 from app.core.step_task_registry import StepTaskRegistry
 from fastapi import HTTPException
+from app.services.rag_postprocess import queue_rag_indexing
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,14 @@ async def run_planning_step(
                         "doc_type": doc_type,
                         "data": result.model_dump(mode="json"),
                     }
+                )
+
+                await queue_rag_indexing(
+                    step="planning",
+                    file_id=result.document_id,
+                    doc_type=doc_type,
+                    markdown_text=result.document,
+                    emit_event=notifier.send,
                 )
 
             except asyncio.CancelledError:
