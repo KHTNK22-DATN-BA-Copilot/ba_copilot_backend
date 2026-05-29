@@ -19,8 +19,11 @@ from app.api.v1 import (
     analysis,
 )
 from app.api.v2 import (
+    analysis as v2_analysis,
+    design as v2_design,
     files as v2_files,
     folders as v2_folders,
+    planning as v2_planning,
     project_members as v2_project_members,
     projects as v2_projects,
     roles as v2_roles,
@@ -164,6 +167,13 @@ app.include_router(
 app.include_router(v2_folders.router, prefix="/api/v2/projects", tags=["v2 folders"])
 app.include_router(v2_files.router, prefix="/api/v2/projects", tags=["v2 files"])
 app.include_router(v2_roles.router, prefix="/api/v2/roles", tags=["v2 roles"])
+app.include_router(
+    v2_planning.router, prefix="/api/v2/projects", tags=["v2 planning"]
+)
+app.include_router(v2_design.router, prefix="/api/v2/projects", tags=["v2 design"])
+app.include_router(
+    v2_analysis.router, prefix="/api/v2/projects", tags=["v2 analysis"]
+)
 
 
 @app.get("/")
