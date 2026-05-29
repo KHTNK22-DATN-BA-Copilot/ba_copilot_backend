@@ -155,24 +155,24 @@ def parse_metadata_response(response: Dict[str, Any]) -> str:
     return file_type
 
 
-def get_detected_types(metadata: Dict[str, Any]) -> List[str]:
-    """
-    Get list of document types that were detected (line_start != -1).
+# def get_detected_types(metadata: Dict[str, Any]) -> List[str]:
+#     """
+#     Get list of document types that were detected (line_start != -1).
     
-    Args:
-        metadata: The file metadata dict
+#     Args:
+#         metadata: The file metadata dict
         
-    Returns:
-        List of detected document type identifiers
-    """
-    detected = []
-    document_types = metadata.get("document_types", {})
+#     Returns:
+#         List of detected document type identifiers
+#     """
+#     detected = []
+#     document_types = metadata.get("file_type", {})
     
-    for doc_type, ranges in document_types.items():
-        if isinstance(ranges, dict) and ranges.get("line_start", -1) != -1:
-            detected.append(doc_type)
+#     for doc_type, ranges in document_types.items():
+#         if isinstance(ranges, dict) and ranges.get("line_start", -1) != -1:
+#             detected.append(doc_type)
     
-    return detected
+#     return detected
 
 
 def create_user_upload_metadata(
