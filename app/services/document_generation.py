@@ -12,12 +12,12 @@ from app.models.folder import Folder
 from app.models.session import Chat_Session
 from app.schemas.folder import CreateFolderRequest
 from app.services.docs_constraint import validate_dependencies
+from app.services.document_format_service import resolve_active_format
 from app.utils.call_ai_service import call_ai_service
 from app.utils.file_handling import update_file_from_supabase, upload_to_supabase
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.metadata_utils import create_ai_generated_metadata
-
 
 FILE_STATUS_COMPLETED = "completed"
 
@@ -131,8 +131,21 @@ async def generate_document(
         raise HTTPException(status_code=500, detail="Failed to create folder")
     folder = result.folder
 
+    result = await resolve_active_format(
+        db=db,
+        project_id=project_id,
+        document_type=document_type,
+    )
     file_urls = await list_project_file_paths(project_id, db)
-    ai_payload = {"message": description, "storage_paths": file_urls}
+
+    ai_payload = {
+        "message": description,
+        "storage_paths": file_urls,
+    }
+
+    if result:
+        ai_payload["document_format"] = result["content"]
+
     ai_data = await call_ai_service(
         get_ai_endpoint(document_type),
         ai_payload,
@@ -151,9 +164,7 @@ async def generate_document(
     file_size_kb = round(len(upload_buffer.getvalue()) / 1024, 2)
     file_path = await upload_to_supabase(
         UploadFile(
-            filename=(
-                f"{access.user.id}/{project_id}/{folder.name}/{unique_title}.md"
-            ),
+            filename=(f"{access.user.id}/{project_id}/{folder.name}/{unique_title}.md"),
             file=upload_buffer,
         )
     )
@@ -245,8 +256,7 @@ def list_documents(
 
     return {
         "documents": [
-            document_response(item_response_cls, doc, type_field)
-            for doc in query.all()
+            document_response(item_response_cls, doc, type_field) for doc in query.all()
         ]
     }
 
@@ -363,12 +373,23 @@ async def regenerate_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    result = await resolve_active_format(
+        db=db,
+        project_id=project_id,
+        document_type=doc.file_type,
+    )
+
     file_urls = await list_project_file_paths(project_id, db)
+
     ai_payload = {
         "message": description,
         "content_id": document_id,
         "storage_paths": file_urls,
     }
+
+    if result:
+        ai_payload["document_format"] = result["content"]
+
     ai_data = await call_ai_service(
         get_ai_endpoint(doc.file_type),
         ai_payload,

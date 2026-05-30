@@ -1,16 +1,9 @@
 # routers/document_format.py
+from typing import Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    HTTPException,
-    UploadFile,
-)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Query
 
 from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 
@@ -34,9 +27,9 @@ from app.services.document_format_service import (
     update_custom_format_content,
     delete_custom_format,
     activate_custom_format,
+    get_project_document_formats,
 )
 
-from app.models.custom_document_format import CustomDocumentFormat
 
 router = APIRouter()
 
@@ -53,76 +46,37 @@ def require_owner(access: ProjectAccessContext):
     "/projects/{project_id}/document-formats",
     response_model=ProjectDocumentFormatListResponse,
 )
-async def get_all_formats(
+async def get_formats(
     project_id: int,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_READ)
-    ),
+    document_type: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FORMAT_READ)),
     db: Session = Depends(get_db),
 ):
-    formats = (
-        db.query(CustomDocumentFormat)
-        .filter(CustomDocumentFormat.project_id == project_id)
-        .order_by(CustomDocumentFormat.created_at.desc())
-        .all()
+    result = get_project_document_formats(
+        db=db,
+        project_id=project_id,
+        document_type=document_type,
+        page=page,
+        size=size,
     )
 
-    result = []
-
-    for item in formats:
-        result.append(
+    return {
+        "pages": result["pages"],
+        "formats": [
             ProjectDocumentFormatResponse(
                 id=item.id,
-                name=item.name,
+                format_name=item.format_name,
                 document_type=item.document_type,
                 extension=item.extension,
                 content=item.content,
                 source="custom",
                 is_activated=item.is_activated,
             )
-        )
-
-    return {"formats": result}
-
-
-@router.get(
-    "/projects/{project_id}/document-formats/types/{document_type}",
-    response_model=ProjectDocumentFormatListResponse,
-)
-async def get_formats_by_type(
-    project_id: int,
-    document_type: str,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_READ)
-    ),
-    db: Session = Depends(get_db),
-):
-    formats = (
-        db.query(CustomDocumentFormat)
-        .filter(
-            CustomDocumentFormat.project_id == project_id,
-            CustomDocumentFormat.document_type == document_type,
-        )
-        .order_by(CustomDocumentFormat.created_at.desc())
-        .all()
-    )
-
-    result = []
-
-    for item in formats:
-        result.append(
-            ProjectDocumentFormatResponse(
-                id=item.id,
-                name=item.name,
-                document_type=item.document_type,
-                extension=item.extension,
-                content=item.content,
-                source="custom",
-                is_activated=item.is_activated,
-            )
-        )
-
-    return {"formats": result}
+            for item in result["formats"]
+        ],
+    }
 
 
 @router.get(
@@ -132,16 +86,20 @@ async def get_formats_by_type(
 async def get_active_format(
     project_id: int,
     document_type: str,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_READ)
-    ),
-    db: AsyncSession = Depends(get_db),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FORMAT_READ)),
+    db: Session = Depends(get_db),
 ):
     result = await resolve_active_format(
         db=db,
         project_id=project_id,
         document_type=document_type,
     )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document type '{document_type}' not found in system defaults.",
+        )
 
     return result
 
@@ -154,9 +112,7 @@ async def upload_format(
     project_id: int,
     document_type: str = Form(...),
     file: UploadFile = File(...),
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FORMAT_WRITE)),
     db: Session = Depends(get_db),
 ):
     require_owner(access)
@@ -182,9 +138,7 @@ async def update_format(
     project_id: int,
     format_id: int,
     req: UpdateDocumentFormatContentRequest,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FORMAT_WRITE)),
     db: Session = Depends(get_db),
 ):
     require_owner(access)
@@ -206,9 +160,7 @@ async def update_format(
 async def activate_format(
     project_id: int,
     format_id: int,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FORMAT_WRITE)),
     db: Session = Depends(get_db),
 ):
     require_owner(access)
@@ -232,9 +184,7 @@ async def activate_format(
 async def remove_format(
     project_id: int,
     format_id: int,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FORMAT_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FORMAT_WRITE)),
     db: Session = Depends(get_db),
 ):
     require_owner(access)
@@ -247,7 +197,4 @@ async def remove_format(
 
     db.commit()
 
-    return {
-        "message": "Custom format deleted successfully"
-    }
-
+    return {"message": "Custom format deleted successfully"}

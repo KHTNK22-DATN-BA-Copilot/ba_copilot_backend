@@ -1,7 +1,8 @@
+from math import ceil
+from typing import Optional
+
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, case, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.custom_document_format import CustomDocumentFormat
 from app.models.default_document_format import DefaultDocumentFormat
 
@@ -12,63 +13,81 @@ from app.utils.document_format import (
 
 import os
 
+def get_project_document_formats(
+    db: Session,
+    project_id: int,
+    page: int = 1,
+    size: int = 10,
+    document_type: Optional[str] = None,
+):
+    query = db.query(CustomDocumentFormat).filter(
+        CustomDocumentFormat.project_id == project_id
+    )
+
+    if document_type:
+        query = query.filter(CustomDocumentFormat.document_type == document_type)
+
+    total = query.count()
+
+    formats = (
+        query.order_by(CustomDocumentFormat.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
+
+    return {
+        "formats": formats,
+        "pages": {
+            "total": total,
+            "page": page,
+            "size": size,
+            "total_pages": ceil(total / size) if total else 0,
+        },
+    }
 
 async def resolve_active_format(
-    db: AsyncSession,
+    db: Session,
     project_id: int,
     document_type: str,
 ):
-    is_custom_active = and_(
-        CustomDocumentFormat.id.isnot(None), CustomDocumentFormat.is_activated.is_(True)
+    custom_format = (
+        db.query(CustomDocumentFormat)
+        .filter(
+            CustomDocumentFormat.project_id == project_id,
+            CustomDocumentFormat.document_type == document_type,
+            CustomDocumentFormat.is_activated.is_(True),
+        )
+        .first()
     )
 
-    stmt = (
-        select(
-            DefaultDocumentFormat.document_type.label("document_type"),
-            case((is_custom_active, "custom"), else_="default").label("source"),
-            case(
-                (is_custom_active, CustomDocumentFormat.id),
-                else_=DefaultDocumentFormat.id,
-            ).label("format_id"),
-            case(
-                (is_custom_active, CustomDocumentFormat.content),
-                else_=DefaultDocumentFormat.content,
-            ).label("content"),
-            case(
-                (is_custom_active, CustomDocumentFormat.extension),
-                else_=DefaultDocumentFormat.extension,
-            ).label("extension"),
+    if custom_format:
+        return {
+            "source": "custom",
+            "document_type": custom_format.document_type,
+            "content": custom_format.content,
+            "extension": custom_format.extension,
+            "format_id": custom_format.id,
+        }
+
+    default_format = (
+        db.query(DefaultDocumentFormat)
+        .filter(
+            DefaultDocumentFormat.document_type == document_type,
         )
-        .outerjoin(
-            CustomDocumentFormat,
-            and_(
-                CustomDocumentFormat.document_type
-                == DefaultDocumentFormat.document_type,
-                CustomDocumentFormat.project_id == project_id,
-                CustomDocumentFormat.is_activated.is_(True),
-            ),
-        )
-        .where(DefaultDocumentFormat.document_type == document_type)
-        .order_by(CustomDocumentFormat.id.desc())
+        .first()
     )
 
-    query_result = await db.execute(stmt)
-    result = query_result.first()
-
-    if not result:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Document type '{document_type}' not found in system defaults.",
-        )
+    if not default_format:
+        return None
 
     return {
-        "source": result.source,
-        "document_type": result.document_type,
-        "content": result.content,
-        "extension": result.extension,
-        "format_id": result.format_id,
+        "source": "default",
+        "document_type": default_format.document_type,
+        "content": default_format.content,
+        "extension": default_format.extension,
+        "format_id": default_format.id,
     }
-
 
 async def upload_custom_document_format(
     db: Session,

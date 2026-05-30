@@ -16,16 +16,22 @@ class DefaultDocumentFormatResponse(BaseModel):
 
 class ProjectDocumentFormatResponse(BaseModel):
     id: int
-    name: str
+    format_name: str
     document_type: str
     extension: str
     content: str
     source: str
     is_activated: bool
 
+class PagePaginationResponse(BaseModel):
+    total: int
+    page: int
+    size: int
+    total_pages: int
 
 class ProjectDocumentFormatListResponse(BaseModel):
     formats: List[ProjectDocumentFormatResponse]
+    pages: PagePaginationResponse
 
 
 class DocumentFormatContentResponse(BaseModel):
