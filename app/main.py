@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 from app.api.v1 import (
     auth,
     ai_credentials,
@@ -17,6 +16,8 @@ from app.api.v1 import (
     design,
     planning,
     analysis,
+    files,
+    document_formats,
 )
 from app.api.v2 import (
     files as v2_files,
@@ -27,7 +28,6 @@ from app.api.v2 import (
 )
 
 from app.api.v1.ws import planning_ws, design_ws, analysis_ws, upload_file_notifier_ws
-from app.api.v1 import files
 from app.core.database import engine, Base
 from app.core.event_listener import redis_event_listener
 import logging
@@ -113,6 +113,11 @@ app.include_router(
     tags=["uploading file notifier websocket"],
 )
 
+app.include_router(
+    document_formats.router,
+    prefix="/api/v1",
+    tags=["format"],
+)
 # Oauth routes
 app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
 

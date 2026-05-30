@@ -15,14 +15,20 @@ class Permission(Enum):
     PROJECT_READ = "project:read"
     PROJECT_WRITE = "project:write"
     PROJECT_DELETE = "project:delete"
+    
     MANAGE_MEMBERS = "project:manage_members"
+
     FILE_READ = "file:read"
     FILE_WRITE = "file:write"
     FILE_DELETE = "file:delete"
+
     FOLDER_READ = "folder:read"
     FOLDER_WRITE = "folder:write"
     FOLDER_DELETE = "folder:delete"
 
+    FORMAT_READ = "format:read"
+    FORMAT_WRITE = "format:write"
+    FORMAT_DELETE = "format:delete"
 
 @dataclass
 class ProjectAccessContext:
