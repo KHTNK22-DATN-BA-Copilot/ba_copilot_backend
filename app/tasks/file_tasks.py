@@ -12,7 +12,7 @@ from app.models.file import Files
 from app.core.config import settings
 from app.utils.file_handling import upload_to_supabase
 from app.utils.call_ai_service import call_ai_service
-from app.utils.metadata_utils import create_user_upload_metadata, get_detected_types
+from app.utils.metadata_utils import create_user_upload_metadata
 from app.utils.rag_indexer import index_rag_chunks
 from app.core.event_emitter import emitter
 
@@ -160,8 +160,6 @@ def extract_metadata_task(self, payload: dict):
         file_record.file_metadata = file_metadata
         file_record.status = "completed"
         db.commit()
-        print("DEBUGGING file_record: ", file_record)
-        print("DEBUGGING file_record['file_type']: ", file_record.file_type)
 
         emitter.emit(
             {
@@ -222,8 +220,10 @@ def index_rag_task(self, payload: dict):
             return payload
 
         metadata = file_record.file_metadata or {}
-        detected_types = get_detected_types(metadata)
-        document_type = metadata.get("primary_type") or (detected_types[0] if detected_types else "unknown")
+
+        # "unknown" since already have fall-back as "stakeholder_requirements", 
+        # which if not working by now, should be "unkown" to be treated as error
+        document_type = metadata.get("file_type", "unknown") 
 
         emitter.emit(
             {

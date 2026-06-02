@@ -166,7 +166,7 @@ def parse_metadata_response(response: Dict[str, Any]) -> str:
 #         List of detected document type identifiers
 #     """
 #     detected = []
-#     document_types = metadata.get("document_types", {})
+#     document_types = metadata.get("file_type", {})
     
 #     for doc_type, ranges in document_types.items():
 #         if isinstance(ranges, dict) and ranges.get("line_start", -1) != -1:
