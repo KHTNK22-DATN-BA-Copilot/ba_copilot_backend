@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.file import Files
 from app.models.user import User
+from app.core.rag_database import get_rag_db
 from app.utils.file_handling import (
     has_extension,
     upload_to_supabase,
@@ -26,6 +27,7 @@ from app.utils.file_handling import (
 from app.schemas.file import UploadedFileResponse, UploadResponse
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
+from app.utils.rag_indexer import delete_rag_chunks_for_file
 from app.tasks.file_tasks import extract_metadata_task, process_markdown_task, index_rag_task
 from celery import chain
 from urllib.parse import quote
@@ -258,8 +260,10 @@ async def delete_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
+    rag_db_gen = get_rag_db()
+    rag_db = next(rag_db_gen)
 
+    try:
         file = (
             db.query(Files)
             .filter(Files.id == file_id, Files.created_by == current_user.id)
@@ -268,6 +272,9 @@ async def delete_file(
 
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
+
+        delete_rag_chunks_for_file(rag_db, file_id=str(file_id))
+        rag_db.commit()
 
         if file.storage_path:
             await delete_file_from_supabase(file.storage_path)
@@ -280,6 +287,15 @@ async def delete_file(
 
         return {"status": "deleted", "file_id": file_id}
 
+    except HTTPException:
+        db.rollback()
+        rag_db.rollback()
+        raise
+
     except Exception as e:
         db.rollback()
+        rag_db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        rag_db_gen.close()

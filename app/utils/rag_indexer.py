@@ -261,3 +261,11 @@ def index_rag_chunks(
             inserted += 1
 
     return inserted
+
+
+def delete_rag_chunks_for_file(db, *, file_id: str) -> int:
+    result = db.execute(
+        text("DELETE FROM rag_chunks WHERE file_id = :file_id"),
+        {"file_id": file_id},
+    )
+    return result.rowcount or 0
