@@ -91,12 +91,11 @@ def validate_dependencies(
     sql_query = """
     SELECT DISTINCT(file_type) FROM files
     WHERE project_id = :project_id 
-    AND updated_by = :user_id
     AND status != 'deleted'
     """
 
     result = db.execute(
-        text(sql_query), {"project_id": project_id, "user_id": current_user.id}
+        text(sql_query), {"project_id": project_id}
     ).fetchall()
 
     existing_file_types = [r[0] for r in result]

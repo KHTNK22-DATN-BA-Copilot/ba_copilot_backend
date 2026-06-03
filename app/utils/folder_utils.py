@@ -21,7 +21,6 @@ async def create_default_folder(
             db.query(Project)
             .filter(
                 Project.id == project_id,
-                Project.user_id == user_id,
                 Project.status != "deleted",
             )
             .first()
