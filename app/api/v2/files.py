@@ -15,7 +15,7 @@ from app.core.rbac import Permission, ProjectAccessContext, require_permission
 from app.models.file import Files
 from app.models.folder import Folder
 from app.schemas.file import UploadedFileResponse, UploadResponse
-from app.tasks.file_tasks import extract_metadata_task, process_markdown_task
+from app.tasks.file_tasks import extract_metadata_task, process_markdown_task, index_rag_task
 from app.utils.file_handling import (
     delete_file_from_supabase,
     download_file_from_supabase,
@@ -24,6 +24,8 @@ from app.utils.file_handling import (
     upload_to_supabase,
 )
 from app.utils.get_unique_name import get_unique_diagram_name
+from app.core.rag_database import get_rag_db
+from app.utils.rag_indexer import delete_rag_chunks_for_file
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -150,6 +152,7 @@ async def upload_files(
             chain(
                 process_markdown_task.s(str(raw_record.id), temp_path, storage_folder),
                 extract_metadata_task.s(),
+                index_rag_task.s(),
             ).apply_async()
 
             uploaded_files.append(
@@ -224,7 +227,10 @@ async def delete_file(
     access: ProjectAccessContext = Depends(require_permission(Permission.FILE_DELETE)),
     db: Session = Depends(get_db),
 ):
-    file = (
+    rag_db_gen = get_rag_db()
+    rag_db = next(rag_db_gen)
+
+    file = ( 
         db.query(Files)
         .filter(
             Files.id == file_id,
@@ -235,6 +241,10 @@ async def delete_file(
     )
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
+    
+    delete_rag_chunks_for_file(rag_db, file_id=str(file_id))
+    rag_db.commit()
+
 
     try:
         if file.storage_path:
@@ -245,6 +255,15 @@ async def delete_file(
         db.delete(file)
         db.commit()
         return {"status": "deleted", "file_id": file_id}
-    except Exception as exc:
+    except HTTPException:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(exc))
+        rag_db.rollback()
+        raise
+
+    except Exception as e:
+        db.rollback()
+        rag_db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        rag_db_gen.close()
