@@ -11,6 +11,7 @@ from app.models.file import Files
 from app.models.folder import Folder
 from app.models.session import Chat_Session
 from app.schemas.folder import CreateFolderRequest
+from app.models.project import Project
 from app.services.docs_constraint import validate_dependencies
 from app.services.document_format_service import resolve_active_format
 from app.utils.call_ai_service import call_ai_service
@@ -41,6 +42,33 @@ async def list_project_file_paths(project_id: int, db: Session):
         )
         for file in file_list
     ]
+
+
+def resolve_description(
+    db: Session,
+    project_id: int,
+    description: str | None,
+) -> str:
+    if description and description.strip():
+        return description.strip()
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        )
+
+    project_name = project.name or ""
+    project_description = project.description or ""
+
+    return f"""
+Project Name: {project_name}
+
+Project Description:
+{project_description}
+""".strip()
 
 
 def document_response(response_cls, doc: Files, type_field: str):
@@ -136,11 +164,18 @@ async def generate_document(
         project_id=project_id,
         document_type=document_type,
     )
-    file_urls = await list_project_file_paths(project_id, db)
+    # file_urls = await list_project_file_paths(project_id, db)
+
+    description = resolve_description(
+        db=db,
+        project_id=project_id,
+        description=description,
+    )
+
 
     ai_payload = {
         "message": description,
-        "storage_paths": file_urls,
+        # "storage_paths": file_urls,
     }
 
     if result:
@@ -373,18 +408,24 @@ async def regenerate_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    description = resolve_description(
+        db=db,
+        project_id=project_id,
+        description=description,
+    )
+
     result = await resolve_active_format(
         db=db,
         project_id=project_id,
         document_type=doc.file_type,
     )
 
-    file_urls = await list_project_file_paths(project_id, db)
+    # file_urls = await list_project_file_paths(project_id, db)
 
     ai_payload = {
         "message": description,
         "content_id": document_id,
-        "storage_paths": file_urls,
+        # "storage_paths": file_urls,
     }
 
     if result:
