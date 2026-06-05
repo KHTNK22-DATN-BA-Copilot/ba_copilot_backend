@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from app.models.custom_document_format import CustomDocumentFormat
-from app.models.default_document_format import DefaultDocumentFormat
 
 from app.utils.document_format import (
     extract_text_from_upload_file,
@@ -61,33 +60,21 @@ async def resolve_active_format(
         .first()
     )
 
-    if custom_format:
-        return {
-            "source": "custom",
-            "document_type": custom_format.document_type,
-            "content": custom_format.content,
-            "extension": custom_format.extension,
-            "format_id": custom_format.id,
-        }
-
-    default_format = (
-        db.query(DefaultDocumentFormat)
-        .filter(
-            DefaultDocumentFormat.document_type == document_type,
-        )
-        .first()
-    )
-
-    if not default_format:
+    if not custom_format:
         return None
 
+    
     return {
-        "source": "default",
-        "document_type": default_format.document_type,
-        "content": default_format.content,
-        "extension": default_format.extension,
-        "format_id": default_format.id,
+        "source": "custom",
+        "document_type": custom_format.document_type,
+        "content": custom_format.content,
+        "extension": custom_format.extension,
+        "format_id": custom_format.id,
     }
+
+    
+
+    
 
 async def upload_custom_document_format(
     db: Session,

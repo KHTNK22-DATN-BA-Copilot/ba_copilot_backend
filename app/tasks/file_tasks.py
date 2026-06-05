@@ -109,8 +109,9 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
 
     finally:
         db_gen.close()
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        if self.request.retries >= self.max_retries:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
 
 @celery_app.task(name="extract_metadata_task", bind=True)
