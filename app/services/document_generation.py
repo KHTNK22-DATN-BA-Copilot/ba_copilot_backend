@@ -175,6 +175,7 @@ async def generate_document(
 
     ai_payload = {
         "message": description,
+        "project_id": project_id,
         # "storage_paths": file_urls,
     }
 
@@ -425,6 +426,7 @@ async def regenerate_document(
     ai_payload = {
         "message": description,
         "content_id": document_id,
+        "project_id": project_id,
         # "storage_paths": file_urls,
     }
 

@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     db_user: str = "bacopilot_user"
     db_password: str
 
-    mailersend_api_key: Optional[str] = None
-    mailersend_from_email: Optional[str] = None
+    sendgrid_api_key: Optional[str] = None
+    sendgrid_from_email: Optional[str] = None
     # TODO: update this to actual email verification logic
     auto_verify_email: bool = True  # Auto-verify emails (skip email sending)
 
