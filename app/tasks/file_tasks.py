@@ -24,6 +24,8 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
     db_gen = get_db()
     db = next(db_gen)
 
+    cleanup_file = False
+
     try:
         logger.info(f"[START] Markdown task file_id={file_id}")
 
@@ -76,6 +78,8 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
 
         logger.info(f"[SUCCESS] Markdown done file_id={file_id}")
 
+        cleanup_file = True
+
         return {
             "file_id": str(file_id),
             "md_text": str(markdown_text),
@@ -87,6 +91,7 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
         try:
             raise self.retry(exc=e, countdown=5)
         except self.MaxRetriesExceededError:
+            cleanup_file = True
             logger.error(f"[FAILED] Markdown max retries exceeded file_id={file_id}")
 
             db.rollback()
@@ -104,14 +109,13 @@ def process_markdown_task(self, file_id: str, temp_path: str, supabase_folder: s
                     "status": "failed",
                 }
             )
-            
+
             raise e
 
     finally:
         db_gen.close()
-        if self.request.retries >= self.max_retries:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+        if cleanup_file and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 @celery_app.task(name="extract_metadata_task", bind=True)
@@ -157,7 +161,7 @@ def extract_metadata_task(self, payload: dict):
         if not file_metadata:
             raise Exception("Metadata creation failed")
 
-        file_record.file_type = file_metadata['file_type']
+        file_record.file_type = file_metadata["file_type"]
         file_record.file_metadata = file_metadata
         file_record.status = "completed"
         db.commit()
@@ -188,13 +192,15 @@ def extract_metadata_task(self, payload: dict):
             file_record.status = "failed"
             db.commit()
 
-        emitter.emit({
-            "project_id": file_record.project_id,
-            "step": "upload",
-            "type": "file_status",
-            "file_id": str(file_id),
-            "status": "failed",
-        })
+        emitter.emit(
+            {
+                "project_id": file_record.project_id,
+                "step": "upload",
+                "type": "file_status",
+                "file_id": str(file_id),
+                "status": "failed",
+            }
+        )
 
         raise Exception(str(e))
 
@@ -222,9 +228,9 @@ def index_rag_task(self, payload: dict):
 
         metadata = file_record.file_metadata or {}
 
-        # "unknown" since already have fall-back as "stakeholder_requirements", 
+        # "unknown" since already have fall-back as "stakeholder_requirements",
         # which if not working by now, should be "unkown" to be treated as error
-        document_type = metadata.get("file_type", "unknown") 
+        document_type = metadata.get("file_type", "unknown")
 
         emitter.emit(
             {
