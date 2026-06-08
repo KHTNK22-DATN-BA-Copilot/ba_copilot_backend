@@ -61,7 +61,6 @@ async def run_analysis_step(
                     doc_type=doc_type,
                     description=description,
                     db=db,
-                    current_user=current_user,
                 )
 
                 await notifier.send(
