@@ -1,9 +1,16 @@
 import asyncio
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, status
-from sqlalchemy.orm import Session
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+    HTTPException,
+)
+
 import logging
-from app.core.database import get_db
+from app.core.database import SessionLocal
 from app.core.security import verify_token
+
 from app.models.user import User
 from app.core.step_task_registry import StepTaskRegistry
 from app.services.step_ws_notifier import StepWSNotifier
@@ -17,7 +24,6 @@ logger = logging.getLogger(__name__)
 async def ws_analysis(
     websocket: WebSocket,
     project_id: int,
-    db: Session = Depends(get_db),
 ):
     token = websocket.query_params.get("token")
     if not token:
@@ -30,10 +36,18 @@ async def ws_analysis(
         return
 
     email = payload.get("sub")
-    current_user = db.query(User).filter(User.email == email).first()
-    if not current_user:
+    
+    db = SessionLocal()
+    try:
+        current_user = db.query(User).filter(User.email == email).first()
+        if not current_user:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    except HTTPException:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    finally:
+        db.close()
 
     await websocket.accept()
 
@@ -66,8 +80,7 @@ async def ws_analysis(
                 project_name=init_data["project_name"],
                 description=init_data.get("description", ""),
                 documents=init_data["documents"],
-                db=db,
-                current_user=current_user,
+                current_user_id=current_user.id,
                 notifier=notifier,
                 stop_event=stop_event,
             ),
