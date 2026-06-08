@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from app.api.v1.planning import (
+from app.api.v2.planning import (
     generate_planning_doc,
 )  
 from app.core.step_task_registry import StepTaskRegistry

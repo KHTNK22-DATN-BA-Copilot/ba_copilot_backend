@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from app.api.v1.design import (
-    generate_design,
+from app.api.v2.design import (
+    generate_design_doc,
 )
 from app.core.step_task_registry import StepTaskRegistry
 from fastapi import HTTPException
@@ -55,7 +55,7 @@ async def run_design_step(
 
             try:
 
-                result = await generate_design(
+                result = await generate_design_doc(
                     project_id=project_id,
                     project_name=doc_type,
                     design_type=doc_type,

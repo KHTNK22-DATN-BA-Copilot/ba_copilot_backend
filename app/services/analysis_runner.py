@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from app.api.v1.analysis import (
+from app.api.v2.analysis import (
     generate_analysis_doc,
 )
 from app.core.step_task_registry import StepTaskRegistry
