@@ -36,7 +36,6 @@ ALLOWED_EXTENSIONS = {
     ".csv",
     ".pdf",
     ".docx",
-    ".doc",
     ".pptx",
     ".png",
     ".jpg",
@@ -148,6 +147,10 @@ async def upload_files(
             os.makedirs("temp_storage", exist_ok=True)
             with open(temp_path, "wb") as output:
                 output.write(binary_content)
+
+            logger.info(f"temp_path={os.path.abspath(temp_path)}")
+            logger.info(f"exists={os.path.exists(temp_path)}")
+            logger.info(f"size={os.path.getsize(temp_path)}")
 
             chain(
                 process_markdown_task.s(str(raw_record.id), temp_path, storage_folder),

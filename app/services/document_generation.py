@@ -11,13 +11,14 @@ from app.models.file import Files
 from app.models.folder import Folder
 from app.models.session import Chat_Session
 from app.schemas.folder import CreateFolderRequest
+from app.models.project import Project
 from app.services.docs_constraint import validate_dependencies
+from app.services.document_format_service import resolve_active_format
 from app.utils.call_ai_service import call_ai_service
 from app.utils.file_handling import update_file_from_supabase, upload_to_supabase
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
 from app.utils.metadata_utils import create_ai_generated_metadata
-
 
 FILE_STATUS_COMPLETED = "completed"
 
@@ -41,6 +42,33 @@ async def list_project_file_paths(project_id: int, db: Session):
         )
         for file in file_list
     ]
+
+
+def resolve_description(
+    db: Session,
+    project_id: int,
+    description: str | None,
+) -> str:
+    if description and description.strip():
+        return description.strip()
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        )
+
+    project_name = project.name or ""
+    project_description = project.description or ""
+
+    return f"""
+Project Name: {project_name}
+
+Project Description:
+{project_description}
+""".strip()
 
 
 def document_response(response_cls, doc: Files, type_field: str):
@@ -131,8 +159,29 @@ async def generate_document(
         raise HTTPException(status_code=500, detail="Failed to create folder")
     folder = result.folder
 
-    file_urls = await list_project_file_paths(project_id, db)
-    ai_payload = {"message": description, "storage_paths": file_urls}
+    result = await resolve_active_format(
+        db=db,
+        project_id=project_id,
+        document_type=document_type,
+    )
+    # file_urls = await list_project_file_paths(project_id, db)
+
+    description = resolve_description(
+        db=db,
+        project_id=project_id,
+        description=description,
+    )
+
+
+    ai_payload = {
+        "message": description,
+        "project_id": project_id,
+        # "storage_paths": file_urls,
+    }
+
+    if result:
+        ai_payload["document_format"] = result["content"]
+
     ai_data = await call_ai_service(
         get_ai_endpoint(document_type),
         ai_payload,
@@ -151,9 +200,7 @@ async def generate_document(
     file_size_kb = round(len(upload_buffer.getvalue()) / 1024, 2)
     file_path = await upload_to_supabase(
         UploadFile(
-            filename=(
-                f"{access.user.id}/{project_id}/{folder.name}/{unique_title}.md"
-            ),
+            filename=(f"{access.user.id}/{project_id}/{folder.name}/{unique_title}.md"),
             file=upload_buffer,
         )
     )
@@ -245,8 +292,7 @@ def list_documents(
 
     return {
         "documents": [
-            document_response(item_response_cls, doc, type_field)
-            for doc in query.all()
+            document_response(item_response_cls, doc, type_field) for doc in query.all()
         ]
     }
 
@@ -363,12 +409,30 @@ async def regenerate_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    file_urls = await list_project_file_paths(project_id, db)
+    description = resolve_description(
+        db=db,
+        project_id=project_id,
+        description=description,
+    )
+
+    result = await resolve_active_format(
+        db=db,
+        project_id=project_id,
+        document_type=doc.file_type,
+    )
+
+    # file_urls = await list_project_file_paths(project_id, db)
+
     ai_payload = {
         "message": description,
         "content_id": document_id,
-        "storage_paths": file_urls,
+        "project_id": project_id,
+        # "storage_paths": file_urls,
     }
+
+    if result:
+        ai_payload["document_format"] = result["content"]
+
     ai_data = await call_ai_service(
         get_ai_endpoint(doc.file_type),
         ai_payload,

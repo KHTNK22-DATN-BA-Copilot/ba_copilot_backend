@@ -1,11 +1,17 @@
 import asyncio
 import logging
-from app.api.v1.analysis import (
+
+from fastapi import HTTPException
+
+from app.api.v2.analysis import (
     generate_analysis_doc,
 )
 from app.core.step_task_registry import StepTaskRegistry
-from fastapi import HTTPException
+from app.core.database import SessionLocal
+from app.core.rbac import check_permission
+from app.core.rbac import Permission
 from app.services.rag_postprocess import queue_rag_indexing
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +21,7 @@ async def run_analysis_step(
     project_name: str,
     description: str,
     documents: list,
-    db,
-    current_user,
+    current_user_id,
     notifier,
     stop_event: asyncio.Event = None,
 ):
@@ -53,15 +58,28 @@ async def run_analysis_step(
                 }
             )
 
+            db = SessionLocal()
+
             try:
+                current_user = db.query(User).filter(User.id == current_user_id).first()
+
+                if not current_user:
+                    raise HTTPException(status_code=401, detail="User not found")
+
+                access = check_permission(
+                    project_id=project_id,
+                    current_user=current_user,
+                    db=db,
+                    permission=Permission.FILE_WRITE,
+                )
 
                 result = await generate_analysis_doc(
                     project_id=project_id,
                     project_name=doc_type,
                     doc_type=doc_type,
                     description=description,
+                    access=access,
                     db=db,
-                    current_user=current_user,
                 )
 
                 await notifier.send(
@@ -100,6 +118,8 @@ async def run_analysis_step(
                         "error": error_payload,
                     }
                 )
+                if he.status_code in [401, 403]:
+                    break
                 continue
 
             except Exception as e:
@@ -114,6 +134,8 @@ async def run_analysis_step(
                     }
                 )
                 continue
+            finally:
+                    db.close()
 
         await notifier.send(
             {
