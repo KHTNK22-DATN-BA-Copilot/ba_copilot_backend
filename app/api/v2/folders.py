@@ -1,14 +1,16 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.rbac import Permission, ProjectAccessContext, require_permission
+from app.models.deletion_job import DeletionJob
 from app.models.file import Files
 from app.models.folder import Folder
 from app.schemas.folder import CreateFolderRequest, UpdateFolderRequest
+from app.services.deletion_service import background_hard_delete_files
 
 router = APIRouter()
 
@@ -224,10 +226,13 @@ async def update_folder(
     return serialize_folder(folder)
 
 
-@router.delete("/{project_id}/folders/{folder_id}")
+@router.delete(
+    "/{project_id}/folders/{folder_id}", status_code=status.HTTP_202_ACCEPTED
+)
 async def delete_folder(
     project_id: int,
     folder_id: int,
+    background_tasks: BackgroundTasks,
     access: ProjectAccessContext = Depends(
         require_permission(Permission.FOLDER_DELETE)
     ),
@@ -245,9 +250,72 @@ async def delete_folder(
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
 
-    folder.is_deleted = True
-    folder.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(folder)
+    # Recursive function to find all descendant folder IDs using a Common Table Expression (CTE)
+    query = """
+    WITH RECURSIVE descendant_folders AS (
+        SELECT id FROM folders WHERE id = :folder_id
+        UNION ALL
+        SELECT f.id FROM folders f
+        INNER JOIN descendant_folders df ON f.parent_id = df.id
+        WHERE f.is_deleted = False
+    )
+    SELECT id FROM descendant_folders;
+    """
+    result = db.execute(text(query), {"folder_id": folder_id})
+    folder_ids_to_delete = [row[0] for row in result.fetchall()]
 
-    return serialize_folder(folder)
+    now_utc = datetime.now(timezone.utc)
+
+    files_to_delete = (
+        db.query(Files)
+        .filter(Files.folder_id.in_(folder_ids_to_delete), Files.status != "deleted")
+        .all()
+    )
+    file_ids = [str(file.id) for file in files_to_delete]
+
+    try:
+        for file in files_to_delete:
+            db.add(
+                DeletionJob(
+                    file_id=file.id,
+                    project_id=file.project_id,
+                    storage_path=file.storage_path,
+                    storage_md_path=file.storage_md_path,
+                    status="pending",
+                )
+        )
+
+        if file_ids:
+            db.query(Files).filter(
+                Files.id.in_([file.id for file in files_to_delete])
+            ).update(
+                {
+                    "status": "deleted",
+                    "updated_at": now_utc,
+                },
+                synchronize_session=False,
+            )
+
+        if folder_ids_to_delete:
+            db.query(Folder).filter(Folder.id.in_(folder_ids_to_delete)).update(
+                {
+                    "is_deleted": True,
+                    "updated_at": now_utc,
+                },
+                synchronize_session=False,
+            )
+
+        db.commit()
+
+        if file_ids:
+            background_tasks.add_task(background_hard_delete_files, file_ids)
+
+        return {
+            "status": "scheduled_for_deletion",
+            "folder_id": folder_id,
+            "folder_count": len(folder_ids_to_delete),
+            "file_count": len(file_ids),
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
