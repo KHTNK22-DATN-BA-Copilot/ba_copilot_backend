@@ -172,7 +172,6 @@ async def generate_document(
         description=description,
     )
 
-
     ai_payload = {
         "message": description,
         "project_id": project_id,
@@ -283,7 +282,6 @@ def list_documents(
 ):
     query = db.query(Files).filter(
         Files.project_id == project_id,
-        Files.status != "deleted",
     )
     if document_type:
         query = query.filter(Files.file_type == document_type)
@@ -401,7 +399,6 @@ async def regenerate_document(
         .filter(
             Files.id == document_id,
             Files.project_id == project_id,
-            Files.status != "deleted",
             Files.file_type.in_(valid_types),
         )
         .first()
@@ -467,6 +464,7 @@ async def regenerate_document(
             "message": description,
             "ai_response": ai_data,
         }
+        doc.status = "completed"
         db.flush()
         db.add_all(
             [

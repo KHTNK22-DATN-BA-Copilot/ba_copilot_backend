@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.models.ai_credential import AICredential
 from app.models.ai_provider_model import AIProviderModel
 from app.models.custom_document_format import CustomDocumentFormat
+from app.models.deletion_job import DeletionJob
 from app.models.file import Files
 from app.models.folder import Folder
 from app.models.global_search_index import GlobalSearchIndex
