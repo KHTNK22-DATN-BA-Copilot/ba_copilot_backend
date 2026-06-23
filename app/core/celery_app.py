@@ -2,16 +2,22 @@ from celery import Celery
 from app.core.config import settings
 
 # don't delete all models below
+from app.models.ai_credential import AICredential
+from app.models.ai_provider_model import AIProviderModel
+from app.models.custom_document_format import CustomDocumentFormat
+from app.models.deletion_job import DeletionJob
 from app.models.file import Files
 from app.models.folder import Folder
 from app.models.global_search_index import GlobalSearchIndex
-from app.models.project_member import ProjectMember
 from app.models.project import Project
+from app.models.project_member import ProjectMember
 from app.models.role import Role
 from app.models.session import Chat_Session
 from app.models.token import Token
-from app.models.user_identity import UserIdentity
 from app.models.user import User
+from app.models.user_identity import UserIdentity
+from app.models.project_member import ProjectMember
+
 
 celery_app = Celery(
     "ba_copilot",

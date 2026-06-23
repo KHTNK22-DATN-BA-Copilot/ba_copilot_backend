@@ -17,12 +17,13 @@ class Project(Base):
     team_size = Column(Integer, default=1)
     settings = Column(JSON, default={}, nullable=False)
     due_date = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.utcnow() + timedelta(days=30)
+        DateTime(timezone=True), default=lambda: datetime.utcnow() + timedelta(days=30)
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-   
+    custom_document_formats = relationship(
+        "CustomDocumentFormat", back_populates="project"
+    )

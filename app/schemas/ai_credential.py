@@ -44,7 +44,6 @@ class AICredentialResponse(BaseResponseModel):
     provider: str
     status: str
     current_model: Optional[str] = None
-    models_json: List[str] = Field(default_factory=list)
     masked_api_key: str
     updated_at: datetime
 
@@ -79,3 +78,6 @@ class ProviderModelsResponse(BaseResponseModel):
 
 class ProviderModelsListResponse(BaseResponseModel):
     items: List[ProviderModelsResponse] = Field(default_factory=list)
+
+class ClearActiveAICredentialResponse(BaseResponseModel):
+    message: str

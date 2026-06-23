@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 from app.api.v1 import (
     auth,
     ai_credentials,
@@ -17,10 +16,21 @@ from app.api.v1 import (
     design,
     planning,
     analysis,
+    files,
+    document_formats,
+)
+from app.api.v2 import (
+    analysis as v2_analysis,
+    design as v2_design,
+    files as v2_files,
+    folders as v2_folders,
+    planning as v2_planning,
+    project_members as v2_project_members,
+    projects as v2_projects,
+    roles as v2_roles,
 )
 
 from app.api.v1.ws import planning_ws, design_ws, analysis_ws, upload_file_notifier_ws
-from app.api.v1 import files
 from app.core.database import engine, Base
 from app.core.event_listener import redis_event_listener
 import logging
@@ -106,6 +116,11 @@ app.include_router(
     tags=["uploading file notifier websocket"],
 )
 
+app.include_router(
+    document_formats.router,
+    prefix="/api/v1",
+    tags=["format"],
+)
 # Oauth routes
 app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
 
@@ -147,6 +162,23 @@ app.add_middleware(
 
 
 app.include_router(one_click.router, prefix="/api/v1", tags=["one click flow"])
+
+app.include_router(v2_projects.router, prefix="/api/v2/projects", tags=["v2 projects"])
+app.include_router(
+    v2_project_members.router,
+    prefix="/api/v2/projects",
+    tags=["v2 project members"],
+)
+app.include_router(v2_folders.router, prefix="/api/v2/projects", tags=["v2 folders"])
+app.include_router(v2_files.router, prefix="/api/v2/projects", tags=["v2 files"])
+app.include_router(v2_roles.router, prefix="/api/v2/roles", tags=["v2 roles"])
+app.include_router(
+    v2_planning.router, prefix="/api/v2/projects", tags=["v2 planning"]
+)
+app.include_router(v2_design.router, prefix="/api/v2/projects", tags=["v2 design"])
+app.include_router(
+    v2_analysis.router, prefix="/api/v2/projects", tags=["v2 analysis"]
+)
 
 
 @app.get("/")

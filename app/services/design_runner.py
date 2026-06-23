@@ -1,10 +1,16 @@
 import asyncio
 import logging
-from app.api.v1.design import (
-    generate_design,
+
+from fastapi import HTTPException
+from app.api.v2.design import (
+    generate_design_doc,
 )
 from app.core.step_task_registry import StepTaskRegistry
-from fastapi import HTTPException
+from app.core.database import SessionLocal
+from app.core.rbac import check_permission
+from app.core.rbac import Permission
+from app.services.rag_postprocess import queue_rag_indexing
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +20,7 @@ async def run_design_step(
     project_name: str,
     description: str,
     documents: list,
-    db,
-    current_user,
+    current_user_id,
     notifier,
     stop_event: asyncio.Event = None,
 ):
@@ -23,7 +28,6 @@ async def run_design_step(
         await notifier.send({"type": "step_start", "step": "design"})
 
         for index, doc in enumerate(documents):
-
             if stop_event and stop_event.is_set():
                 logger.info(
                     f"Project {project_id}: design generation stopped by user request."
@@ -52,15 +56,28 @@ async def run_design_step(
                 }
             )
 
-            try:
+            db = SessionLocal()
 
-                result = await generate_design(
+            try:
+                current_user = db.query(User).filter(User.id == current_user_id).first()
+
+                if not current_user:
+                    raise HTTPException(status_code=401, detail="User not found")
+
+                access = check_permission(
+                    project_id=project_id,
+                    current_user=current_user,
+                    db=db,
+                    permission=Permission.FILE_WRITE,
+                )
+
+                result = await generate_design_doc(
                     project_id=project_id,
                     project_name=doc_type,
                     design_type=doc_type,
                     description=description,
+                    access=access,
                     db=db,
-                    current_user=current_user,
                 )
 
                 await notifier.send(
@@ -71,6 +88,14 @@ async def run_design_step(
                         "doc_type": doc_type,
                         "data": result.model_dump(mode="json"),
                     }
+                )
+
+                await queue_rag_indexing(
+                    step="design",
+                    file_id=result.document_id,
+                    doc_type=doc_type,
+                    markdown_text=result.document,
+                    emit_event=notifier.send,
                 )
 
             except asyncio.CancelledError:
@@ -91,6 +116,9 @@ async def run_design_step(
                         "error": error_payload,
                     }
                 )
+                if he.status_code in [401, 403]:
+                    break
+
                 continue
 
             except Exception as e:
@@ -105,6 +133,8 @@ async def run_design_step(
                     }
                 )
                 continue
+            finally:
+                db.close()
 
         await notifier.send(
             {
@@ -120,8 +150,6 @@ async def run_design_step(
 
     except Exception as e:
         logger.error(f"FATAL design ERROR: {str(e)}")
-        await notifier.send(
-            {"type": "step_error", "step": "design", "message": str(e)}
-        )
+        await notifier.send({"type": "step_error", "step": "design", "message": str(e)})
     finally:
-        StepTaskRegistry.finish(project_id,current_user.id, "design")
+        StepTaskRegistry.finish(project_id, current_user_id, "design")

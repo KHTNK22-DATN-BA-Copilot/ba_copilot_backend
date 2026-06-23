@@ -42,11 +42,14 @@ ALL_DOCUMENT_TYPES = [
     # Phase 7: Testing & QA
     "rtm",
     # Additional
-    "srs",
-    "class-diagram",
-    "usecase-diagram",
-    "activity-diagram",
-    "wireframe",
+    # "srs",
+    # "class-diagram",
+    # "usecase-diagram",
+    # "activity-diagram",
+    # "wireframe",
+
+    # Other
+    "other",
 ]
 
 
@@ -73,6 +76,7 @@ def create_ai_generated_metadata(
     step: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
+    #TODO: Update this method (single type per file)
     Create metadata for AI-generated files.
     
     For AI-generated files, we know the entire content is a single document type,
@@ -89,6 +93,7 @@ def create_ai_generated_metadata(
     Returns:
         Dict with structured metadata
     """
+    print("start create_ai_generated_metadata")
     total_lines = count_lines(content)
     
     # Build document_types dict with line ranges
@@ -119,11 +124,11 @@ def create_ai_generated_metadata(
         metadata["ai_response"] = ai_response
     if step:
         metadata["step"] = step
-    
+    print("done create_ai_generated_metadata")
     return metadata
 
 
-def parse_metadata_response(response: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
+def parse_metadata_response(response: Dict[str, Any]) -> str:
     """
     Parse metadata extraction response from AI service into a dict format.
     
@@ -131,44 +136,43 @@ def parse_metadata_response(response: Dict[str, Any]) -> Dict[str, Dict[str, int
         response: The response from AI metadata extraction service
         
     Returns:
-        Dict mapping document type to {line_start, line_end}
+        a str representing file type
     """
-    document_types = {}
     
     if not response:
-        return document_types
+        return ""
     
-    items = response.get("response", [])
-    if isinstance(items, list):
-        for item in items:
-            doc_type = item.get("type")
-            if doc_type:
-                document_types[doc_type] = {
-                    "line_start": item.get("line_start", -1),
-                    "line_end": item.get("line_end", -1)
-                }
-    
-    return document_types
+    # items = response.get("response", [])
+    # if isinstance(items, list):
+    #     for item in items:
+    #         doc_type = item.get("type")
+    #         if doc_type:
+    #             document_types[doc_type] = {
+    #                 "line_start": item.get("line_start", -1),
+    #                 "line_end": item.get("line_end", -1)
+    #             }
+    file_type = response.get("response", "stakeholder_requirements")
+    return file_type
 
 
-def get_detected_types(metadata: Dict[str, Any]) -> List[str]:
-    """
-    Get list of document types that were detected (line_start != -1).
+# def get_detected_types(metadata: Dict[str, Any]) -> List[str]:
+#     """
+#     Get list of document types that were detected (line_start != -1).
     
-    Args:
-        metadata: The file metadata dict
+#     Args:
+#         metadata: The file metadata dict
         
-    Returns:
-        List of detected document type identifiers
-    """
-    detected = []
-    document_types = metadata.get("document_types", {})
+#     Returns:
+#         List of detected document type identifiers
+#     """
+#     detected = []
+#     document_types = metadata.get("file_type", {})
     
-    for doc_type, ranges in document_types.items():
-        if isinstance(ranges, dict) and ranges.get("line_start", -1) != -1:
-            detected.append(doc_type)
+#     for doc_type, ranges in document_types.items():
+#         if isinstance(ranges, dict) and ranges.get("line_start", -1) != -1:
+#             detected.append(doc_type)
     
-    return detected
+#     return detected
 
 
 def create_user_upload_metadata(
@@ -189,36 +193,35 @@ def create_user_upload_metadata(
     Returns:
         Standardized metadata dict
     """
-    document_types = parse_metadata_response(metadata_response)
     
     return {
         "extraction_status": "success",
-        "document_types": document_types,
+        "file_type": parse_metadata_response(metadata_response),
         "total_lines": count_lines(content),
         "source_file": filename,
     }
 
 
-def merge_metadata(existing: Dict[str, Any], new_extraction: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merge existing metadata with new extraction results.
+# def merge_metadata(existing: Dict[str, Any], new_extraction: Dict[str, Any]) -> Dict[str, Any]:
+#     """
+#     Merge existing metadata with new extraction results.
     
-    Preserves existing fields while updating document_types.
+#     Preserves existing fields while updating document_types.
 
-    If there are name conflict, the new one takes precedence.
+#     If there are name conflict, the new one takes precedence.
     
-    Args:
-        existing: Existing metadata dict
-        new_extraction: New extraction results
+#     Args:
+#         existing: Existing metadata dict
+#         new_extraction: New extraction results
         
-    Returns:
-        Merged metadata dict
-    """
-    merged = existing.copy()
+#     Returns:
+#         Merged metadata dict
+#     """
+#     merged = existing.copy()
     
-    # Update document_types
-    if "document_types" in new_extraction:
-        merged["document_types"] = new_extraction["document_types"]
-        merged["extraction_status"] = new_extraction.get("extraction_status", "updated")
+#     # Update document_types
+#     if "document_types" in new_extraction:
+#         merged["document_types"] = new_extraction["document_types"]
+#         merged["extraction_status"] = new_extraction.get("extraction_status", "updated")
     
-    return merged
+#     return merged

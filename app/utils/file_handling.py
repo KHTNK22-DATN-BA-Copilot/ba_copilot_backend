@@ -71,6 +71,18 @@ async def delete_file_from_supabase(file_path: str) -> bool:
         return False
 
 
+async def delete_file_from_supabase_strict(file_path: str) -> bool:
+    clean_path = file_path.lstrip("/")
+    response = supabase.storage.from_(SUPABASE_BUCKET).remove([clean_path])
+
+    if response and len(response) > 0:
+        logger.info(f"Deleted file from storage: {clean_path}")
+    else:
+        logger.info(f"Storage file already absent: {clean_path}")
+
+    return True
+
+
 async def list_file_from_supabase(existing_files_db: List):
     existing_files_uploadfile = []
     for file in existing_files_db:

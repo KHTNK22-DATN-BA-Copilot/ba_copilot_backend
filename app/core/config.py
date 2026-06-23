@@ -1,6 +1,12 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import Optional, List
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+apiKey = os.getenv("OPENAI_API_KEY", None)
+print(f"OPENAI_API_KEY: {apiKey[:5]}...") 
 
 
 class Settings(BaseSettings):
@@ -16,8 +22,8 @@ class Settings(BaseSettings):
     db_user: str = "bacopilot_user"
     db_password: str
 
-    mailersend_api_key: Optional[str] = None
-    mailersend_from_email: Optional[str] = None
+    sendgrid_api_key: Optional[str] = None
+    sendgrid_from_email: Optional[str] = None
     # TODO: update this to actual email verification logic
     auto_verify_email: bool = True  # Auto-verify emails (skip email sending)
 
@@ -36,6 +42,15 @@ class Settings(BaseSettings):
 
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
+    rag_database_url: Optional[str] = os.getenv("RAG_DATABASE_URL")
+
+    openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY", None)
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_url: str = os.getenv("OPENROUTER_BASE_URL")
+
+    rag_chunk_size: int = 500
+    rag_chunk_overlap: int = 70
+    rag_embed_batch_size: int = 64
 
     ai_service_url_srs: str
     ai_service_url_wireframe: str
@@ -70,6 +85,7 @@ class Settings(BaseSettings):
 
     # Metadata extraction service
     ai_service_url_metadata_extraction: str = "http://ai:8000/api/v1/metadata/extract"
+    ai_service_url_rag_index: str = "http://ai:8000/api/v1/rag/index"
 
     # Google OAuth2 config
     google_client_id: str

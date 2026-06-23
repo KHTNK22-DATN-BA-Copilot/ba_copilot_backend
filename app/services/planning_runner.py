@@ -1,10 +1,17 @@
 import asyncio
 import logging
-from app.api.v1.planning import (
-    generate_planning_doc,
-)  
-from app.core.step_task_registry import StepTaskRegistry
+
 from fastapi import HTTPException
+
+from app.api.v2.planning import (
+    generate_planning_doc,
+)
+from app.core.step_task_registry import StepTaskRegistry
+from app.core.database import SessionLocal
+from app.core.rbac import check_permission
+from app.core.rbac import Permission
+from app.services.rag_postprocess import queue_rag_indexing
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -14,23 +21,21 @@ async def run_planning_step(
     project_name: str,
     description: str,
     documents: list,
-    db,
-    current_user,
+    current_user_id,
     notifier,
-    stop_event: asyncio.Event = None,  
+    stop_event: asyncio.Event = None,
 ):
     try:
         await notifier.send({"type": "step_start", "step": "planning"})
 
         for index, doc in enumerate(documents):
-
             if stop_event and stop_event.is_set():
                 logger.info(
                     f"Project {project_id}: Planning generation stopped by user request."
                 )
                 await notifier.send(
                     {
-                        "type": "step_stopped", 
+                        "type": "step_stopped",
                         "step": "planning",
                         "message": "User requested stop. Remaining tasks skipped.",
                     }
@@ -52,15 +57,28 @@ async def run_planning_step(
                 }
             )
 
+            db = SessionLocal()
+
             try:
+                current_user = db.query(User).filter(User.id == current_user_id).first()
+
+                if not current_user:
+                    raise HTTPException(status_code=401, detail="User not found")
+
+                access = check_permission(
+                    project_id=project_id,
+                    current_user=current_user,
+                    db=db,
+                    permission=Permission.FILE_WRITE,
+                )
 
                 result = await generate_planning_doc(
                     project_id=project_id,
                     project_name=doc_type,
                     doc_type=doc_type,
                     description=description,
+                    access=access,
                     db=db,
-                    current_user=current_user,
                 )
 
                 await notifier.send(
@@ -71,6 +89,14 @@ async def run_planning_step(
                         "doc_type": doc_type,
                         "data": result.model_dump(mode="json"),
                     }
+                )
+
+                await queue_rag_indexing(
+                    step="planning",
+                    file_id=result.document_id,
+                    doc_type=doc_type,
+                    markdown_text=result.document,
+                    emit_event=notifier.send,
                 )
 
             except asyncio.CancelledError:
@@ -91,7 +117,9 @@ async def run_planning_step(
                         "error": error_payload,
                     }
                 )
-                continue  
+                if he.status_code in [401, 403]:
+                    break
+                continue
 
             except Exception as e:
                 logger.exception(f"[PLANNING][{doc_type}] UNEXPECTED ERROR")
@@ -105,6 +133,8 @@ async def run_planning_step(
                     }
                 )
                 continue
+            finally:
+                db.close()
 
         await notifier.send(
             {
@@ -124,4 +154,4 @@ async def run_planning_step(
             {"type": "step_error", "step": "planning", "message": str(e)}
         )
     finally:
-        StepTaskRegistry.finish(project_id,current_user.id ,"planning")
+        StepTaskRegistry.finish(project_id, current_user_id, "planning")
