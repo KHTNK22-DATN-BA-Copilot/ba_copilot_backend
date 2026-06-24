@@ -2,6 +2,7 @@ from collections import defaultdict
 from app.models.ai_provider_model import AIProviderModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import case
 
 from app.api.v1.auth import get_current_user
 from app.core.database import get_db
@@ -10,6 +11,7 @@ from app.models.user import User
 from app.schemas.ai_credential import (
     ActivateAICredentialResponse,
     AICredentialResponse,
+    DeleteAICredentialResponse,
     ListAICredentialsResponse,
     ProviderModelsListResponse,
     ProviderModelsResponse,
@@ -161,7 +163,12 @@ def list_api_keys(
     credentials = (
         db.query(AICredential)
         .filter(AICredential.user_id == current_user.id)
-        .order_by(AICredential.updated_at.desc())
+        .order_by(
+            case(
+                (AICredential.status == "active", 0),
+                else_=1,
+            ),
+            AICredential.updated_at.desc())
         .all()
     )
 
@@ -338,5 +345,89 @@ def activate_api_credential(
 
     return {
         "message": "AI credential activated successfully",
+        "data": _build_ai_credential_response(credential, masked),
+    }
+
+# This endpoint allows deleting an existing credential by its ID. 
+@router.delete("/api-key/{credential_id}", response_model=DeleteAICredentialResponse)
+def delete_api_credential(
+    credential_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    credential = (
+        db.query(AICredential)
+        .filter(
+            AICredential.id == credential_id,
+            AICredential.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI credential not found",
+        )
+
+    db.delete(credential)
+    db.commit()
+
+    return {"message": "AI credential deleted successfully"}
+
+# This endpoint allows changing the current_model for a specific credential by its ID.
+@router.patch("/api-key/{credential_id}/current-model", response_model=UpdateCurrentModelResponse)
+def update_credential_model(
+    credential_id: int,
+    request: UpdateCurrentModelRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    credential = (
+        db.query(AICredential)
+        .filter(
+            AICredential.id == credential_id,
+            AICredential.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI credential not found",
+        )
+
+    allowed_model = (
+        db.query(AIProviderModel)
+        .filter(
+            AIProviderModel.provider == credential.provider,
+            AIProviderModel.is_active == True,
+            AIProviderModel.model_name == request.current_model,
+        )
+        .first()
+    )
+    if not allowed_model:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="current_model is not allowed for this provider or not active",
+        )
+
+    credential.current_model = request.current_model
+    db.commit()
+    db.refresh(credential)
+
+    try:
+        plain_api_key = decrypt_api_key(
+            credential.encrypted_api_key,
+            credential.iv,
+            credential.auth_tag,
+        )
+        masked = mask_api_key(plain_api_key)
+    except ValueError:
+        masked = ""
+
+    return {
+        "message": "Current model updated successfully",
         "data": _build_ai_credential_response(credential, masked),
     }
