@@ -81,3 +81,6 @@ class ProviderModelsListResponse(BaseResponseModel):
 
 class ClearActiveAICredentialResponse(BaseResponseModel):
     message: str
+
+class DeleteAICredentialResponse(BaseResponseModel):
+    message: str
