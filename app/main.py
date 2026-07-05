@@ -28,6 +28,7 @@ from app.api.v2 import (
     project_members as v2_project_members,
     projects as v2_projects,
     roles as v2_roles,
+    search as v2_search,
 )
 
 from app.api.v1.ws import planning_ws, design_ws, analysis_ws, upload_file_notifier_ws
@@ -126,6 +127,7 @@ app.include_router(oauth.router, prefix="/api/v1/oauth", tags=["oauth"])
 
 # Search route
 app.include_router(search.router, prefix="/api/v1/search", tags=["global search"])
+app.include_router(v2_search.router, prefix="/api/v2/search", tags=["v2 global search"])
 
 # Configure CORS
 app.add_middleware(

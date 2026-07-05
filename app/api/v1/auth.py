@@ -11,6 +11,7 @@ from app.core.security import (
     verify_email_otp,
 )
 from app.models.user import User
+from app.models.user_identity import UserIdentity
 from app.models.token import Token
 from app.schemas.auth import (
     RegisterRequest,
@@ -246,33 +247,52 @@ def reset_password(
 @router.post("/login", response_model=TokenResponse)
 def login(email: str = Form(), password: str = Form(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
-    if not user or not verify_password(password, user.passwordhash):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
 
-    
-    access_token = create_access_token(data={"sub": user.email})
+    identity = db.query(UserIdentity).filter(UserIdentity.user_id == user.id).first()
+
+    if identity and not user.passwordhash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Please login using your social account",
+        )
+
+    if not verify_password(password, user.passwordhash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+
+    try:
+        access_token = create_access_token(data={"sub": user.email})
+
+        
+        expired_at = datetime.now(timezone.utc) + timedelta(days=7)
+        refresh_token = str(uuid.uuid4())
 
     
-    expired_at = datetime.now(timezone.utc) + timedelta(days=7)
-    refresh_token = str(uuid.uuid4())
+        token_record = Token(
+            token=refresh_token,
+            expiry_date=expired_at,  
+            user_id=user.id,
+        )
+        db.add(token_record)
+        db.commit()
 
-   
-    token_record = Token(
-        token=refresh_token,
-        expiry_date=expired_at,  
-        user_id=user.id,
-    )
-    db.add(token_record)
-    db.commit()
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-    }
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during login: {str(e)}",
+        ) 
 
 
 @router.post("/refresh")
