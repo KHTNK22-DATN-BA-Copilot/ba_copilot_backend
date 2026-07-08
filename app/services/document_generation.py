@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Callable, Optional
@@ -49,6 +50,7 @@ def resolve_description(
     project_id: int,
     description: str | None,
 ) -> str:
+
     if description and description.strip():
         return description.strip()
 
