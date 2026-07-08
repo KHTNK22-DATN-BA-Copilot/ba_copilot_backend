@@ -282,6 +282,7 @@ def list_documents(
 ):
     query = db.query(Files).filter(
         Files.project_id == project_id,
+        Files.file_category == "ai gen",
     )
     if document_type:
         query = query.filter(Files.file_type == document_type)
