@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query
@@ -27,6 +28,7 @@ from app.schemas.design import (
 from app.utils.file_handling import extract_html_css_from_content, merge_html_css
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def transform_design_generate_response(ai_inner_response):
@@ -47,9 +49,7 @@ async def generate_design_doc(
         ..., description="Type of design document (e.g., hld-arch, lld-db)"
     ),
     description: Optional[str] = Form(""),
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FILE_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FILE_WRITE)),
     db: Session = Depends(get_db),
 ):
     return await generate_document(
@@ -73,9 +73,7 @@ async def generate_design_doc(
 async def list_design_docs(
     project_id: int,
     design_type: Optional[str] = Query(None),
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FILE_READ)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FILE_READ)),
     db: Session = Depends(get_db),
 ):
     return list_documents(
@@ -93,9 +91,7 @@ async def list_design_docs(
 async def get_design_doc(
     project_id: int,
     document_id: str,
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FILE_READ)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FILE_READ)),
     db: Session = Depends(get_db),
 ):
     return get_document(
@@ -113,9 +109,7 @@ async def update_design_doc(
     project_id: int,
     document_id: str,
     content: str = Form(...),
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FILE_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FILE_WRITE)),
     db: Session = Depends(get_db),
 ):
     return await update_document(
@@ -137,11 +131,10 @@ async def regenerate_design_doc(
     project_id: int,
     document_id: str,
     description: Optional[str] = Form(""),
-    access: ProjectAccessContext = Depends(
-        require_permission(Permission.FILE_WRITE)
-    ),
+    access: ProjectAccessContext = Depends(require_permission(Permission.FILE_WRITE)),
     db: Session = Depends(get_db),
 ):
+    logger.info(f"description: {description}")
     return await regenerate_document(
         project_id=project_id,
         document_id=document_id,
@@ -150,7 +143,7 @@ async def regenerate_design_doc(
         type_field="design_type",
         response_cls=DesignGenerateResponse,
         get_ai_endpoint=get_ai_endpoint,
-        format_response=format_design_response,
+        format_response=transform_design_generate_response,
         access=access,
         db=db,
     )
