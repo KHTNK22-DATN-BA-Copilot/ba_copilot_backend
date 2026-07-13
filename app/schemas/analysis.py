@@ -21,6 +21,7 @@ class GetAnalysisResponse(BaseResponseModel):
     project_name: str
     content: str
     doc_type: str
+    file_category: str
     status: str
     updated_at: datetime
     file_size_kb:float

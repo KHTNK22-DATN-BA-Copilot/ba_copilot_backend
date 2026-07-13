@@ -102,7 +102,6 @@ async def generate_design(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     if design_type not in VALID_DESIGN_TYPES:
         raise HTTPException(
             status_code=400,
@@ -259,6 +258,7 @@ async def list_designs(
                 project_name=doc.name,
                 content=doc.content,
                 design_type=doc.file_type,
+                file_category=doc.file_category,
                 status=doc.status,
                 updated_at=doc.updated_at,
                 file_size_kb=doc.file_size,
@@ -294,6 +294,7 @@ async def get_design_document(
         project_name=doc.name,
         content=doc.content,
         design_type=doc.file_type,
+        file_category=doc.file_category,
         status=doc.status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
@@ -308,7 +309,6 @@ async def update_design_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     doc = (
         db.query(Files)
         .filter(
