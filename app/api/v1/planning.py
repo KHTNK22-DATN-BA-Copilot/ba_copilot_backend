@@ -147,7 +147,7 @@ async def generate_planning_doc(
             file_category="ai gen",
             file_type=doc_type,
             file_metadata=file_metadata,
-            file_size=file_size_kb
+            file_size=file_size_kb,
         )
         db.add(new_file)
         db.flush()
@@ -213,6 +213,7 @@ async def list_planning_docs(
                 project_name=d.name,
                 content=d.content,
                 doc_type=d.file_type,
+                file_category=d.file_category,
                 status=d.status,
                 updated_at=d.updated_at,
                 file_size_kb=d.file_size,
@@ -246,6 +247,7 @@ async def get_planning_doc(
         project_name=doc.name,
         content=doc.content,
         doc_type=doc.file_type,
+        file_category=doc.file_category,
         status=doc.status,
         updated_at=doc.updated_at,
         file_size_kb=doc.file_size,
@@ -287,7 +289,7 @@ async def update_planning_doc(
         ),
     )
 
-    doc.file_size=file_size_kb
+    doc.file_size = file_size_kb
     if path:
         doc.storage_path = path
 
@@ -305,7 +307,7 @@ async def update_planning_doc(
 
     if chat_session:
         chat_session.message = content
-        
+
     db.commit()
     db.refresh(doc)
     return UpdatePlanningResponse(
@@ -313,7 +315,7 @@ async def update_planning_doc(
         project_name=doc.name,
         content=content,
         updated_at=doc.updated_at,
-        file_size_kb=doc.file_size
+        file_size_kb=doc.file_size,
     )
 
 
@@ -370,7 +372,7 @@ async def regenerate_planning_doc(
 
     try:
         doc.content = content
-        doc.file_size=file_size_kb
+        doc.file_size = file_size_kb
         doc.updated_by = current_user.id
         doc.storage_path = path
         doc.file_metadata = {

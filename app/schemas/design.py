@@ -14,7 +14,9 @@ class DesignGenerateResponse(BaseResponseModel):
     user_id: Optional[str] = Field(
         None, description="User ID who generated the document"
     )
-    generated_at: datetime = Field(..., description="Timestamp when document was generated")
+    generated_at: datetime = Field(
+        ..., description="Timestamp when document was generated"
+    )
     input_description: str = Field(
         ..., description="Original input used for generation"
     )
@@ -22,7 +24,7 @@ class DesignGenerateResponse(BaseResponseModel):
     design_type: str = Field(..., description="Type of design (e.g., hld-arch, lld-db)")
     status: str = Field(..., description="Generation status")
     recommend_documents: Optional[List[str]] = None
-    file_size_kb:float=Field(...,description="File size")
+    file_size_kb: float = Field(..., description="File size")
 
 
 class GetDesignResponse(BaseResponseModel):
@@ -30,6 +32,7 @@ class GetDesignResponse(BaseResponseModel):
     project_name: str
     content: str
     design_type: str
+    file_category: str
     status: str
     updated_at: datetime
     file_size_kb: float
@@ -41,6 +44,7 @@ class UpdateDesignResponse(BaseResponseModel):
     content: str
     updated_at: datetime
     file_size_kb: float
+
 
 class DesignListResponse(BaseResponseModel):
     documents: List[GetDesignResponse] = Field(

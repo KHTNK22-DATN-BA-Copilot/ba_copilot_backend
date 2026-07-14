@@ -50,7 +50,6 @@ def resolve_description(
     project_id: int,
     description: str | None,
 ) -> str:
-
     if description and description.strip():
         return description.strip()
 
@@ -79,6 +78,7 @@ def document_response(response_cls, doc: Files, type_field: str):
         "project_name": doc.name,
         "content": doc.content,
         "status": doc.status,
+        "file_category": doc.file_category,
         "updated_at": doc.updated_at,
         "file_size_kb": doc.file_size,
     }
@@ -284,7 +284,7 @@ def list_documents(
 ):
     query = db.query(Files).filter(
         Files.project_id == project_id,
-        Files.file_category == "ai gen",
+        Files.status != "deleted",
     )
     if document_type:
         query = query.filter(Files.file_type == document_type)
@@ -402,6 +402,7 @@ async def regenerate_document(
         .filter(
             Files.id == document_id,
             Files.project_id == project_id,
+            Files.status != "deleted",
             Files.file_type.in_(valid_types),
         )
         .first()
