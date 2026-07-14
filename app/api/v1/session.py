@@ -81,7 +81,6 @@ async def list_session_ai(
         db.query(Chat_Session)
         .filter(Chat_Session.content_id == content_id)
         .order_by(Chat_Session.created_at.desc())
-        .limit(3)
         .all()
     )
 
