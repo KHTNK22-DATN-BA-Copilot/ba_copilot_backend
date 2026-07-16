@@ -22,9 +22,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     LogoutResponse,
 )
-from app.schemas.refrest_token import (
-    RefreshTokenRequest
-)
+from app.schemas.refrest_token import RefreshTokenRequest
 from app.schemas.user import UserResponse, RegisterResponse
 from datetime import datetime, timedelta, timezone
 import secrets
@@ -36,7 +34,6 @@ from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
 from fastapi import Query
 from app.core.mailer import send_reset_email, send_verify_email_otp
-
 
 
 router = APIRouter()
@@ -90,7 +87,11 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = db.query(User).filter(User.email == email).first()
+    user = (
+        db.query(User)
+        .filter(User.email == email)
+        .first()
+    )
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -103,20 +104,16 @@ def get_current_user(
 
 @router.post("/register", response_model=RegisterResponse)
 def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
-    
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-   
     hashed_password = get_password_hash(user_data.passwordhash)
     otp = str(secrets.randbelow(1000000)).zfill(6)
     hashed_otp = get_otp_hash(otp)
-    
-  
-   
+
     if settings.auto_verify_email:
         email_verified = True
         print(f"Auto-verified email for user: {user_data.email}")
@@ -124,7 +121,9 @@ def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
         email_verified = False
         email_sent = send_verify_email_otp(user_data.email, otp)
         if not email_sent:
-            print(f"WARNING: Failed to send verification email to {user_data.email}. User registered but email not sent.")
+            print(
+                f"WARNING: Failed to send verification email to {user_data.email}. User registered but email not sent."
+            )
 
     db_user = User(
         name=user_data.name,
@@ -168,7 +167,6 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-   
     if not verify_password(password_data.old_password, current_user.passwordhash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect old password"
@@ -252,9 +250,20 @@ def login(email: str = Form(), password: str = Form(), db: Session = Depends(get
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email address not verified. Please check your inbox and verify your email.",
+        )
 
-    identity = db.query(UserIdentity).filter(UserIdentity.user_id == user.id).first()
+    identity = (
+        db.query(UserIdentity)
+        .filter(UserIdentity.user_id == user.id)
+        .first()
+    )
 
+    
     if identity and not user.passwordhash:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -270,14 +279,12 @@ def login(email: str = Form(), password: str = Form(), db: Session = Depends(get
     try:
         access_token = create_access_token(data={"sub": user.email})
 
-        
         expired_at = datetime.now(timezone.utc) + timedelta(days=7)
         refresh_token = str(uuid.uuid4())
 
-    
         token_record = Token(
             token=refresh_token,
-            expiry_date=expired_at,  
+            expiry_date=expired_at,
             user_id=user.id,
         )
         db.add(token_record)
@@ -292,23 +299,17 @@ def login(email: str = Form(), password: str = Form(), db: Session = Depends(get
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during login: {str(e)}",
-        ) 
+        )
 
 
 @router.post("/refresh")
 def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
-
     if not request.refresh_token:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Refresh Token is required!"
         )
 
-    
-    refresh_token = (
-        db.query(Token)
-        .filter(Token.token == request.refresh_token)
-        .first()
-    )
+    refresh_token = db.query(Token).filter(Token.token == request.refresh_token).first()
 
     if not refresh_token:
         raise HTTPException(
@@ -316,7 +317,6 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="Refresh token is not in database!",
         )
 
-    
     if refresh_token.expiry_date < datetime.now(timezone.utc):
         db.delete(refresh_token)
         db.commit()
@@ -325,7 +325,6 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="Refresh token was expired. Please make a new signin request.",
         )
 
-    
     user = refresh_token.user
     if not user:
         raise HTTPException(
@@ -333,7 +332,6 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="User not found for this refresh token.",
         )
 
-    
     new_access_token = create_access_token(
         data={"sub": user.email},
         expires_delta=timedelta(hours=1),
@@ -370,7 +368,6 @@ def logout(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    
     token_record = db.query(Token).filter(Token.token == token).first()
     if token_record:
         db.delete(token_record)
