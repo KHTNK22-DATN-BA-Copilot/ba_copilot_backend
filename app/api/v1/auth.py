@@ -119,10 +119,16 @@ def register_user(user_data: RegisterRequest, db: Session = Depends(get_db)):
         print(f"Auto-verified email for user: {user_data.email}")
     else:
         email_verified = False
-        email_sent = send_verify_email_otp(user_data.email, otp)
-        if not email_sent:
-            print(
-                f"WARNING: Failed to send verification email to {user_data.email}. User registered but email not sent."
+        try: 
+            email_sent = send_verify_email_otp(user_data.email, otp)
+            if not email_sent:
+                print(
+                    f"WARNING: Failed to send verification email to {user_data.email}. User registered but email not sent."
+                )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to send verification email: {str(e)}",
             )
 
     db_user = User(
@@ -158,6 +164,9 @@ def verify_email_by_otp(
 
     user.email_verification_token = None
     user.email_verification_expiration = None
+    user.email_verified = True
+    db.commit()
+    db.refresh(user)
     return {"message": "OTP verified successfully"}
 
 
