@@ -228,7 +228,7 @@ def index_rag_task(self, payload: dict):
 
         metadata = file_record.file_metadata or {}
 
-        # "unknown" since already have fall-back as "stakeholder_requirements",
+        # "unknown" since already have fall-back as "others",
         # which if not working by now, should be "unkown" to be treated as error
         document_type = metadata.get("file_type", "unknown")
 
