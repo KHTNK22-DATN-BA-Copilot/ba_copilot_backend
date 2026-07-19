@@ -365,19 +365,19 @@ async def update_document(
     if path:
         doc.storage_path = path
 
-    chat_session = (
-        db.query(Chat_Session)
-        .filter(
-            Chat_Session.project_id == project_id,
-            Chat_Session.content_id == doc.id,
-            Chat_Session.content_type == doc.file_type,
-            Chat_Session.role == "ai",
-        )
-        .order_by(Chat_Session.created_at.desc())
-        .first()
-    )
-    if chat_session:
-        chat_session.message = content
+    # chat_session = (
+    #     db.query(Chat_Session)
+    #     .filter(
+    #         Chat_Session.project_id == project_id,
+    #         Chat_Session.content_id == doc.id,
+    #         Chat_Session.content_type == doc.file_type,
+    #         Chat_Session.role == "ai",
+    #     )
+    #     .order_by(Chat_Session.created_at.desc())
+    #     .first()
+    # )
+    # if chat_session:
+    #     chat_session.message = content
 
     db.commit()
     db.refresh(doc)
