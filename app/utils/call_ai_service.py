@@ -1,12 +1,13 @@
 import asyncio
+import json
 import random
 import httpx
 import logging
+import re
 from fastapi import HTTPException, status
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.services.ai_credentials import resolve_ai_headers_for_user
-
 logger = logging.getLogger(__name__)
 
 GENERIC_AI_ERROR = (
@@ -32,6 +33,82 @@ def _is_quota_or_token_error(data: Any) -> bool:
         "exceeded",
     )
     return any(keyword in text for keyword in keywords)
+
+
+def _clean_outer_json_code_fence(value: str) -> str:
+    if not isinstance(value, str):
+        return value
+
+    value = value.strip()
+
+    # Remove opening ```json or ```
+    value = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove closing ```
+    value = re.sub(
+        r"\s*```$",
+        "",
+        value,
+    )
+
+    return value.strip()
+
+def _normalize_ai_response(
+    data: Dict[str, Any],
+) -> Dict[str, Any]:
+    response = data.get("response")
+
+    if not isinstance(response, dict):
+        return data
+
+    content = response.get("content")
+
+    if not isinstance(content, str):
+        return data
+
+    cleaned_content = _clean_outer_json_code_fence(content)
+
+
+    try:
+        parsed_content = json.loads(cleaned_content)
+
+    except json.JSONDecodeError:
+        return data
+
+ 
+    if not isinstance(parsed_content, dict):
+        return data
+
+   
+    response_fields = {
+        "content",
+        "summary",
+        "status_code",
+    }
+
+    if not response_fields.intersection(parsed_content.keys()):
+        return data
+
+    logger.warning(
+        "AI response fields were incorrectly nested "
+        "inside response.content. Normalizing response structure."
+    )
+
+
+    normalized_response = {
+        **response,
+        **parsed_content,
+    }
+
+    return {
+        **data,
+        "response": normalized_response,
+    }
 
 
 async def call_ai_service(
@@ -109,8 +186,10 @@ async def call_ai_service(
             if data.get("type") == "metadata_extraction":
                 return data
 
-            ai_res = data.get("response")
+            # data = _normalize_ai_response(data)
 
+            ai_res = data.get("response")
+            logger.info(f" AI Response: {data}")
             content = ai_res.get("content")
             inner_status = ai_res.get("status_code", 200)
 

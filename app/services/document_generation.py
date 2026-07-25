@@ -19,7 +19,6 @@ from app.utils.call_ai_service import call_ai_service
 from app.utils.file_handling import update_file_from_supabase, upload_to_supabase
 from app.utils.folder_utils import create_default_folder
 from app.utils.get_unique_name import get_unique_diagram_name
-from app.utils.llm_parser import process_llm_response
 from app.utils.metadata_utils import create_ai_generated_metadata
 
 FILE_STATUS_COMPLETED = "completed"
@@ -192,8 +191,6 @@ async def generate_document(
     )
 
     ai_inner = ai_data.get("response", {})
-    if isinstance(ai_inner, str):
-        ai_inner = process_llm_response(ai_inner)
     content = (
         content_transform(ai_inner) if content_transform else format_response(ai_inner)
     )
@@ -444,8 +441,6 @@ async def regenerate_document(
         user_id=access.user.id,
     )
     ai_inner = ai_data.get("response", {})
-    if isinstance(ai_inner, str):
-        ai_inner = process_llm_response(ai_inner)
     content = str(format_response(ai_inner))
 
     folder = db.query(Folder).filter(Folder.id == doc.folder_id).first()

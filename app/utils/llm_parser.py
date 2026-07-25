@@ -1,35 +1,108 @@
-import json
 import re
+from typing import Any, Dict
 
 
-def process_llm_response(raw_llm_output: str) -> dict:
-    """Xử lý output từ LLM để tạo ra JSON object chứa 'content' và 'summary'
-
-    đúng chuẩn format.
-    """
+def process_llm_response(raw_llm_output: str) -> Dict[str, Any]:
+   
     if not isinstance(raw_llm_output, str):
-        return {"content": str(raw_llm_output), "summary": "No summary provided."}
+        return {
+            "response": {
+                "content": str(raw_llm_output),
+                "summary": "No summary provided.",
+            }
+        }
 
     text = raw_llm_output.strip()
 
-    # 1. Bóc tách khối code block nếu LLM cố tình chèn ```markdown hoặc ```
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n", "", text)
-        text = re.sub(r"\n```$", "", text).strip()
+    if not text:
+        return {
+            "response": {
+                "content": "",
+                "summary": "No summary provided.",
+            }
+        }
 
-    # 2. Tìm nội dung bên trong thẻ <summary>...</summary>
-    summary_pattern = r"<summary>(.*?)</summary>"
-    summary_match = re.search(summary_pattern, text, flags=re.DOTALL)
+ 
+    text = _remove_outer_code_fence(text)
 
-    if summary_match:
-        # Lấy nội dung summary và làm sạch dòng thừa
-        summary = summary_match.group(1).strip()
-        # Xóa thẻ <summary> ra khỏi text để giữ lại phần Content (Markdown) nguyên bản
-        content = re.sub(summary_pattern, "", text, flags=re.DOTALL).strip()
-    else:
-        # Fallback an toàn nếu LLM quên sinh thẻ <summary>
-        summary = "No summary provided."
-        content = text
+   
+    return _parse_marker_format(text)
 
-    # 3. Trả về Dictionary đúng cấu trúc yêu cầu
-    return {"content": content, "summary": summary}
+def _remove_outer_code_fence(text: str) -> str:
+    text = text.strip()
+
+    match = re.match(
+        r"^```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)\n```$",
+        text,
+    )
+
+    if match:
+        return match.group(1).strip()
+
+    return text
+
+
+def _parse_marker_format(text: str) -> Dict[str, Any]:
+    summary_match = re.search(
+        r"===SUMMARY===\s*\n([\s\S]*?)(?=\n===\w+===|$)",
+        text,
+    )
+
+    summary = (
+        summary_match.group(1).strip() if summary_match else "No summary provided."
+    )
+
+
+    html_match = re.search(
+        r"===HTML===\s*\n([\s\S]*?)(?=\n===\w+===|$)",
+        text,
+    )
+
+    css_match = re.search(
+        r"===CSS===\s*\n([\s\S]*?)(?=\n===\w+===|$)",
+        text,
+    )
+
+    if html_match or css_match:
+        html = html_match.group(1).strip() if html_match else ""
+        css = css_match.group(1).strip() if css_match else ""
+
+        return {
+            "response": {
+                "content": {
+                    "html": html,
+                    "css": css,
+                },
+                "summary": summary,
+            }
+        }
+
+    content_match = re.search(
+        r"===CONTENT===\s*\n([\s\S]*?)$",
+        text,
+    )
+
+    if content_match:
+        content = content_match.group(1).strip()
+
+        return {
+            "response": {
+                "content": content,
+                "summary": summary,
+            }
+        }
+
+ 
+    content = re.sub(
+        r"===SUMMARY===\s*\n[\s\S]*?(?=\n===\w+===|$)",
+        "",
+        text,
+    ).strip()
+
+    return {
+        "response": {
+            "content": content,
+            "summary": summary,
+        }
+    }
+

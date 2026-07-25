@@ -13,7 +13,6 @@ from app.utils.file_handling import (
     extract_html_css_from_content,
     merge_html_css,
 )
-from app.utils.llm_parser import process_llm_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,19 +28,18 @@ def build_session_response(session_list):
         if session.role == "ai":
             try:
                 parsed = json.loads(session.message)
-                if isinstance(parsed, dict):
-                    content = parsed.get("content")
-                    summary = parsed.get("summary") or ""
+                content = parsed.get("content")
 
-                    if isinstance(content, dict):
-                        html_content, css_content = extract_html_css_from_content(content)
-                        message = merge_html_css(html_content, css_content or "")
-                    elif isinstance(content, str):
-                        message = content
-                    else:
-                        message = ""
+                if isinstance(content, dict):
+                    html_content, css_content = extract_html_css_from_content(content)
+                    message = merge_html_css(html_content, css_content or "")
+                elif isinstance(content, str):
+                    message = content
                 else:
-                    message = str(parsed)
+                    message = ""
+
+                summary = parsed.get("summary") or ""
+
             except Exception:
                 message = session.message or ""
         else:
