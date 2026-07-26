@@ -155,4 +155,4 @@ async def run_analysis_step(
             {"type": "step_error", "step": "analysis", "message": str(e)}
         )
     finally:
-        StepTaskRegistry.finish(project_id, current_user.id,"analysis")
+        StepTaskRegistry.finish(project_id, current_user_id,"analysis")
