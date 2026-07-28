@@ -15,7 +15,11 @@ from app.core.rbac import Permission, ProjectAccessContext, require_permission
 from app.models.file import Files
 from app.models.folder import Folder
 from app.schemas.file import UploadedFileResponse, UploadResponse
-from app.tasks.file_tasks import extract_metadata_task, process_markdown_task, index_rag_task
+from app.tasks.file_tasks import (
+    extract_metadata_task,
+    process_markdown_task,
+    index_rag_task,
+)
 from app.utils.file_handling import (
     delete_file_from_supabase,
     download_file_from_supabase,
@@ -206,14 +210,13 @@ async def export_file(
         if not media_type:
             media_type = "application/octet-stream"
 
+        encoded_filename = quote(filename)
+
         return StreamingResponse(
             file_stream,
             media_type=media_type,
             headers={
-                "Content-Disposition": (
-                    f'attachment; filename="{filename}"; '
-                    f"filename*=UTF-8''{quote(filename)}"
-                )
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
             },
         )
     except HTTPException:
@@ -233,7 +236,7 @@ async def delete_file(
     rag_db_gen = get_rag_db()
     rag_db = next(rag_db_gen)
 
-    file = ( 
+    file = (
         db.query(Files)
         .filter(
             Files.id == file_id,
@@ -244,10 +247,9 @@ async def delete_file(
     )
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     delete_rag_chunks_for_file(rag_db, file_id=str(file_id))
     rag_db.commit()
-
 
     try:
         if file.storage_path:

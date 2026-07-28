@@ -189,7 +189,6 @@ async def call_ai_service(
             # data = _normalize_ai_response(data)
 
             ai_res = data.get("response")
-            logger.info(f" AI Response: {data}")
             content = ai_res.get("content")
             inner_status = ai_res.get("status_code", 200)
 
